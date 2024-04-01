@@ -416,11 +416,15 @@ Core& GetCore()
     return core;
 }
 
-class session
+class server;
+
+class session //можно сделать вложенным классом, тогда можно будет использовать методы server
 {
 public:
-    session(boost::asio::io_service& io_service)
-        : socket_(io_service)
+    session(boost::asio::io_service& io_service, server* serv)
+        : user_id_(0)
+        , socket_(io_service)
+        , server_(serv)
     {
     }
 
@@ -455,15 +459,18 @@ public:
                 reply_ = GetCore().RegisterNewUser(j["Login"], j["Password"]);
             else if (reqType == Requests::LogIn)
                 reply_ = GetCore().LogIn(j["Login"], j["Password"]);
+            else if (reqType == Requests::AddRequestSale)
+                reply_ = GetCore().AddRequestSale(j["UserId"], j["Count"], j["Price"]);
+            else if (reqType == Requests::AddRequestPurchase)
+                reply_ = GetCore().AddRequestPurchase(j["UserId"], j["Count"], j["Price"]);
             else if (reqType == Requests::Balance)
             {
                 auto balance = GetCore().GetUserbalance(j["UserId"]);
                 reply_ = balance.first + " RUB, " + balance.second + " USD";
             }
-            else if (reqType == Requests::AddRequestSale)
-                reply_ = GetCore().AddRequestSale(j["UserId"], j["Count"], j["Price"]);
-            else if (reqType == Requests::AddRequestPurchase)
-                reply_ = GetCore().AddRequestPurchase(j["UserId"], j["Count"], j["Price"]);
+
+            if (reqType == Requests::Registration || reqType == Requests::LogIn)
+                user_id_ = stoi(reply_);
 
             if (reqType == Requests::AddRequestSale || reqType == Requests::AddRequestPurchase)
             {
@@ -484,7 +491,7 @@ public:
 
 
             boost::asio::async_write(socket_,
-                boost::asio::buffer(reply_, reply_.size()),
+                boost::asio::buffer(reply_, reply_.size()),//не успевал создаваться, закинул в private
                 boost::bind(&session::handle_write, this,
                     boost::asio::placeholders::error));
         }
@@ -513,8 +520,10 @@ private:
     std::string reply_;
     std::string purchase_reply_;
     std::string sale_reply_;
+    int user_id_;
 
-    tcp::socket socket_; // на каждого клиента по сокету
+    tcp::socket socket_; 
+    server* server_;
     enum { max_length = 1024 };
     char data_[max_length];
 };
@@ -528,10 +537,18 @@ public:
     {
         std::cout << "Server started! Listen " << port << " port" << std::endl;
 
-        session* new_session = new session(io_service_);
+        session* new_session = new session(io_service_, this);
+        sessions_.push_back(new_session);
+
         acceptor_.async_accept(new_session->socket(),
             boost::bind(&server::handle_accept, this, new_session,
                 boost::asio::placeholders::error));
+    }
+
+    ~server()
+    {
+        for (session* s : sessions_)
+            delete s;
     }
 
     void handle_accept(session* new_session,
@@ -540,7 +557,9 @@ public:
         if (!error)
         {
             new_session->start();
-            new_session = new session(io_service_);
+            new_session = new session(io_service_, this);
+            sessions_.push_back(new_session);
+
             acceptor_.async_accept(new_session->socket(),
                 boost::bind(&server::handle_accept, this, new_session,
                     boost::asio::placeholders::error));
@@ -552,6 +571,7 @@ public:
     }
 
 private:
+    std::vector<session*> sessions_;
     boost::asio::io_service& io_service_;
     tcp::acceptor acceptor_;
 };
