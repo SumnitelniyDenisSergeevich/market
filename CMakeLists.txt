@@ -23,7 +23,3 @@ TARGET_LINK_LIBRARIES(Server PRIVATE Threads::Threads ${Boost_LIBRARIES} PRIVATE
 
 ADD_EXECUTABLE(Client Client.cpp Common.hpp json.hpp)
 TARGET_LINK_LIBRARIES(Client PRIVATE Threads::Threads ${Boost_LIBRARIES})
-
-
-CMAKE_MINIMUM_REQUIRED(VERSION 3.21)
-PROJECT(ClienServerEcn)
