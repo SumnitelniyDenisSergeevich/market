@@ -196,16 +196,16 @@ public:
     std::vector<DealData> ExecuteRequests()
     {
         std::string result;
-        std::string query_str = "SELECT"            //Беру в БД только заявки на закупки, сортирую по убыванию доллара и по возрастанию даты
-                                "   id,"
-                                "   user_id,"
-                                "   dollar_price,"
-                                "   dollars_count"
-                                "FROM public.request_purchase_sale"
-                                "WHERE"
-                                "   sale = false"
-                                "ORDER BY"
-                                "   dollar_price DESC,"
+        std::string query_str = "SELECT "            //Беру в БД только заявки на закупки, сортирую по убыванию доллара и по возрастанию даты
+                                "   id, "
+                                "   user_id, "
+                                "   dollar_price, "
+                                "   dollars_count "
+                                "FROM public.request_purchase_sale "
+                                "WHERE "
+                                "   sale = false "
+                                "ORDER BY "
+                                "   dollar_price DESC, "
                                 "   request_date;";
 
         char* query = new char[query_str.length() + 1];
@@ -226,21 +226,21 @@ public:
                 std::string user_id{ PQgetvalue(res, i, 1) };
                 std::string price  { PQgetvalue(res, i, 2) };
                 std::string count  { PQgetvalue(res, i, 3) };
-                purchase_req.push_back(ReqData{ std::stoi(user_id), std::stoi(price), std::stod(count), PQgetvalue(res, i, 0) });
+                purchase_req.push_back(ReqData{ std::stoi(user_id), std::stoi(count), std::stod(price) , PQgetvalue(res, i, 0) });
             }
         }
         PQclear(res);
 
-        query_str = "SELECT"            //Беру в БД только заявки на продажу, сортирую по возрастанию доллара и по возрастанию даты
-                    "   id,"
-                    "   user_id,"
-                    "   dollar_price,"
-                    "   dollars_count"
-                    "FROM public.request_purchase_sale"
-                    "WHERE"
-                    "   sale = true"
-                    "ORDER BY"
-                    "   dollar_price ASC,"
+        query_str = "SELECT "            //Беру в БД только заявки на продажу, сортирую по возрастанию доллара и по возрастанию даты
+                    "   id, "
+                    "   user_id, "
+                    "   dollar_price, "
+                    "   dollars_count "
+                    "FROM public.request_purchase_sale "
+                    "WHERE "
+                    "   sale = true "
+                    "ORDER BY "
+                    "   dollar_price ASC, "
                     "   request_date;";
 
         query = new char[query_str.length() + 1];
@@ -261,7 +261,7 @@ public:
                 std::string user_id{ PQgetvalue(res, i, 1) };
                 std::string price  { PQgetvalue(res, i, 2) };
                 std::string count  { PQgetvalue(res, i, 3) };
-                sale_req.push_back(ReqData{ std::stoi(user_id), std::stoi(price), std::stod(count), PQgetvalue(res, i, 0) });
+                sale_req.push_back(ReqData{ std::stoi(user_id), std::stoi(count), std::stod(price) , PQgetvalue(res, i, 0) });
             }
         }
         PQclear(res);
@@ -271,11 +271,8 @@ public:
         std::vector<std::string> delete_req;
         std::map<std::string, int> req_id_count;
 
-//        std::vector<ReqData>::iterator pur_iter = purchase_req.begin();
-//        std::vector<ReqData>::iterator sale_iter = sale_req.begin();
-
         for (auto pur_iter = purchase_req.begin(); pur_iter != purchase_req.end(); ++pur_iter)
-            for (auto sale_iter = sale_req.begin(); sale_iter != purchase_req.end(); ++sale_iter)
+            for (auto sale_iter = sale_req.begin(); sale_iter != sale_req.end(); ++sale_iter)
             {
                 if (pur_iter->price < sale_iter->price || pur_iter->count == 0)
                     break;
@@ -332,7 +329,8 @@ public:
 
                 if (first)
                     query_str += id;
-                query_str += " OR id = " + id;
+                else
+                    query_str += " OR id = " + id;
                 first = false;
             }
 
@@ -346,7 +344,7 @@ public:
         //Исправление заявки
         for (const auto [id, count] : req_id_count)
         {
-            query_str = "UPDATE public.request_purchase_sale"
+            query_str = "UPDATE public.request_purchase_sale "
                 "SET dollars_count = " + std::to_string(count) + " "
                 "WHERE id = " + id + "; ";
 
@@ -359,13 +357,33 @@ public:
 //============================= Изменение баланса пользователей =======================
 
         std::map<int, BalanceChanges> user_id_income; //Обрабатываю массив, что бы посылать на 1 юзера не более одного запроса
-        for (const DealData& deal : deals)
+
+        if (!deals.empty())
         {
-            double income = deal.count * deal.price;
-            user_id_income[deal.seller_id].income += income;
-            user_id_income[deal.seller_id].count += -deal.count;
-            user_id_income[deal.buyer_id].income += -income;
-            user_id_income[deal.buyer_id].count += deal.count;
+            query_str = "INSERT INTO public.transaction_history(buyer_id, seller_id, dollar_price, dollars_count) VALUES";
+            bool first = true;
+            for (const DealData& deal : deals) // впихнуть LOG
+            {
+                double income = deal.count * deal.price;
+                user_id_income[deal.seller_id].income += income;
+                user_id_income[deal.seller_id].count += -deal.count;
+                user_id_income[deal.buyer_id].income += -income;
+                user_id_income[deal.buyer_id].count += deal.count;
+
+                if (!first)
+                    query_str += ", ";
+
+                query_str += " (" + std::to_string(deal.buyer_id) + ", " + std::to_string(deal.seller_id) + ", "
+                    + std::to_string(deal.price) + ", " + std::to_string(deal.count) + ") ";
+
+                first = false;
+            }
+
+            query = new char[query_str.length() + 1];
+            strcpy(query, query_str.c_str());
+            res = PQexec(db_conn_, query);
+            delete[] query;
+            PQclear(res);
         }
 
         for (const auto [id, balance_changes] : user_id_income)//Изменение баланса пользователей
@@ -373,10 +391,10 @@ public:
             std::string user_id = std::to_string(id);
             auto balance_count = GetUserbalance(user_id);
 
-            query_str = "UPDATE public.request_purchase_sale"
+            query_str = "UPDATE public.user_balance "
                 "SET usd_count = " + std::to_string(stoi(balance_count.second) + balance_changes.count) + ", "
                 "    balance = " + std::to_string(stod(balance_count.first) + balance_changes.income) + " "
-                "WHERE id = " + user_id + "; ";
+                "WHERE user_id = " + user_id + "; ";
 
             query = new char[query_str.length() + 1];
             strcpy(query, query_str.c_str());

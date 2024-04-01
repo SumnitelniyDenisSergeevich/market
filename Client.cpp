@@ -172,8 +172,8 @@ int main()
             std::cout << "Menu:\n"
                 "1) Balance Request\n"
                 "2) Add Request for sale\n"
-                "2) Add Request for purchase\n"
-                "3) Exit\n"
+                "3) Add Request for purchase\n"
+                "4) Exit\n"
                 << std::endl;
 
             std::cin >> menu_option_num;
