@@ -16,20 +16,24 @@ ALTER TABLE IF EXISTS public.users_log_pus
     OWNER to postgres;
 
 -- Table: public.user_balance
-DROP TABLE IF EXISTS public.user_balance;
+
+-- DROP TABLE IF EXISTS public.user_balance;
 
 CREATE TABLE IF NOT EXISTS public.user_balance
 (
     id bigint NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 9223372036854775807 CACHE 1 ),
     user_id bigint NOT NULL,
     balance numeric DEFAULT 0,
+    usd_count bigint DEFAULT 0,
     CONSTRAINT user_balance_pkey PRIMARY KEY (id),
     CONSTRAINT fk_users_log_pus_id FOREIGN KEY (user_id)
         REFERENCES public.users_log_pus (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION
 )
-
+WITH (
+    OIDS = FALSE
+)
 TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.user_balance

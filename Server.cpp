@@ -24,6 +24,12 @@ namespace
         int count;
         double price;
     };
+
+    struct BalanceChanges
+    {
+        double income;
+        int count;
+    };
 }
 
 using boost::asio::ip::tcp;
@@ -117,10 +123,10 @@ public:
     }
 
     // Запрос имени клиента по ID
-    std::string GetUserbalance(const std::string& aUserId)
+    std::pair<std::string, std::string> GetUserbalance(const std::string& aUserId)
     {
-        std::string result;
-        std::string query_str = "SELECT balance FROM public.user_balance WHERE user_id = " + aUserId + ";";
+        std::pair<std::string, std::string> result;
+        std::string query_str = "SELECT balance, usd_count FROM public.user_balance WHERE user_id = " + aUserId + ";";
         char* query = new char[query_str.length() + 1];
         strcpy(query, query_str.c_str());
 
@@ -134,7 +140,8 @@ public:
             if (rows)
             {
                 std::string balance{ PQgetvalue(res, 0, 0) };
-                result = balance;
+                std::string usd_count{ PQgetvalue(res, 0, 1) };
+                result = std::make_pair(balance, usd_count);
                 std::cout << "UserId: " << aUserId << " asked Balance\n";
             }
         }
@@ -186,7 +193,7 @@ public:
     //При продаже, выставляю минимальную цену, могу ПРОДАЮ СНАЧАЛА ДОРОГИЕ, если есть 2 позиции, выбираю ту, что раньше датой
 
     
-    void ExecuteRequests()
+    std::vector<DealData> ExecuteRequests()
     {
         std::string result;
         std::string query_str = "SELECT"            //Беру в БД только заявки на закупки, сортирую по убыванию доллара и по возрастанию даты
@@ -261,63 +268,71 @@ public:
 
 
         std::vector<DealData> deals;//для подсчета баланса и заполнения истории 
-        std::vector<ReqData>::iterator pur_iter = purchase_req.begin();
-        std::vector<ReqData>::iterator sale_iter = sale_req.begin();
-        while (pur_iter != purchase_req.end() && sale_iter != sale_req.end())
-        {
-            if (pur_iter->price < sale_iter->price)
-                break;
+        std::vector<std::string> delete_req;
+        std::map<std::string, int> req_id_count;
 
-            if (pur_iter->user_id == sale_iter->user_id)//ОБОСРАЛО ВСЮ МАЛИНУ
+//        std::vector<ReqData>::iterator pur_iter = purchase_req.begin();
+//        std::vector<ReqData>::iterator sale_iter = sale_req.begin();
+
+        for (auto pur_iter = purchase_req.begin(); pur_iter != purchase_req.end(); ++pur_iter)
+            for (auto sale_iter = sale_req.begin(); sale_iter != purchase_req.end(); ++sale_iter)
             {
+                if (pur_iter->price < sale_iter->price || pur_iter->count == 0)
+                    break;
 
+                if (pur_iter->user_id == sale_iter->user_id || sale_iter->count == 0)
+                    continue;
+
+                DealData deal;
+                deal.buyer_id = pur_iter->user_id;
+                deal.seller_id = sale_iter->user_id;
+                deal.price = pur_iter->price;
+
+                if (pur_iter->count == sale_iter->count)
+                {
+                    deal.count = pur_iter->count;
+                    pur_iter->count = 0;
+                    sale_iter->count = 0;
+
+                    delete_req.push_back(pur_iter->req_id);
+                    delete_req.push_back(sale_iter->req_id);
+                }
+                else if (pur_iter->count > sale_iter->count)
+                {
+                    deal.count = sale_iter->count;
+                    pur_iter->count -= sale_iter->count;
+                    sale_iter->count = 0;
+                    delete_req.push_back(sale_iter->req_id);
+                    req_id_count[pur_iter->req_id] = pur_iter->count;
+                }
+                else
+                {
+                    deal.count = pur_iter->count;
+                    sale_iter->count -= pur_iter->count;
+                    pur_iter->count = 0;
+                    delete_req.push_back(pur_iter->req_id);
+                    req_id_count[sale_iter->req_id] = sale_iter->count;
+                }
+                deals.push_back(deal);
             }
 
-            DealData deal;
-            deal.buyer_id = pur_iter->user_id;
-            deal.seller_id = sale_iter->user_id;
-            deal.price = pur_iter->price;
-
-            if (pur_iter->count == sale_iter->count)
-            {
-                deal.count = pur_iter->count;
-
-                ++pur_iter;
-                ++sale_iter;
-            }
-            else if (pur_iter->count > sale_iter->count)
-            {
-                deal.count = sale_iter->count;
-                pur_iter->count -= sale_iter->count;
-
-                ++sale_iter;
-            }
-            else
-            {
-                deal.count = pur_iter->count;
-                sale_iter->count -= pur_iter->count;
-
-                ++pur_iter;
-            }
-            deals.push_back(deal);
-        }
-
-        if (pur_iter != purchase_req.begin() || sale_iter != sale_req.begin())//Удаление пустых заявок
+        //Удаление заявок
+        if (delete_req.size())
         {
             query_str = "DELETE FROM public.request_purchase_sale WHERE id = ";
             bool first = true;
-            for (auto iter = purchase_req.begin(); iter != pur_iter; ++iter)
+
+
+
+            for (const std::string& id : delete_req)
             {
+                auto iter = req_id_count.find(id);
+                if (iter != req_id_count.end())// Удаляю лишние заявки, которые не надо будет обновлять
+                    req_id_count.erase(iter);
+
                 if (first)
-                    query_str += iter->req_id;
-                query_str += " OR id = " + iter->req_id;
-                first = false;
-            }
-            for (auto iter = sale_req.begin(); iter != sale_iter; ++iter)
-            {
-                if (first)
-                    query_str += iter->req_id;
-                query_str += " OR id = " + iter->req_id;
+                    query_str += id;
+                query_str += " OR id = " + id;
                 first = false;
             }
 
@@ -329,11 +344,11 @@ public:
         }
 
         //Исправление заявки
-        if (sale_iter != sale_req.end())
+        for (const auto [id, count] : req_id_count)
         {
             query_str = "UPDATE public.request_purchase_sale"
-                "SET dollars_count = " + std::to_string(sale_iter->count) + " "
-                "WHERE id = " + sale_iter->req_id + "; ";
+                "SET dollars_count = " + std::to_string(count) + " "
+                "WHERE id = " + id + "; ";
 
             query = new char[query_str.length() + 1];
             strcpy(query, query_str.c_str());
@@ -341,11 +356,27 @@ public:
             delete[] query;
             PQclear(res);
         }
-        if (pur_iter != purchase_req.end())
+//============================= Изменение баланса пользователей =======================
+
+        std::map<int, BalanceChanges> user_id_income; //Обрабатываю массив, что бы посылать на 1 юзера не более одного запроса
+        for (const DealData& deal : deals)
         {
+            double income = deal.count * deal.price;
+            user_id_income[deal.seller_id].income += income;
+            user_id_income[deal.seller_id].count += -deal.count;
+            user_id_income[deal.buyer_id].income += -income;
+            user_id_income[deal.buyer_id].count += deal.count;
+        }
+
+        for (const auto [id, balance_changes] : user_id_income)//Изменение баланса пользователей
+        {
+            std::string user_id = std::to_string(id);
+            auto balance_count = GetUserbalance(user_id);
+
             query_str = "UPDATE public.request_purchase_sale"
-                "SET dollars_count = " + std::to_string(pur_iter->count) + " "
-                "WHERE id = " + pur_iter->req_id + "; ";
+                "SET usd_count = " + std::to_string(stoi(balance_count.second) + balance_changes.count) + ", "
+                "    balance = " + std::to_string(stod(balance_count.first) + balance_changes.income) + " "
+                "WHERE id = " + user_id + "; ";
 
             query = new char[query_str.length() + 1];
             strcpy(query, query_str.c_str());
@@ -353,16 +384,8 @@ public:
             delete[] query;
             PQclear(res);
         }
-                
-        for (auto iter = deals.begin(); iter != deals.end(); ++iter)
-        {
 
-        }
-
-        //boost::asio::async_write(socket_,
-        //    boost::asio::buffer(reply_, reply_.size()),
-        //    boost::bind(&session::handle_write, this,
-        //        boost::asio::placeholders::error));
+        return deals;//Для отправки писем пользователям, о совершении сделки
     }
 
 private:
@@ -415,11 +438,32 @@ public:
             else if (reqType == Requests::LogIn)
                 reply_ = GetCore().LogIn(j["Login"], j["Password"]);
             else if (reqType == Requests::Balance)
-                reply_ = GetCore().GetUserbalance(j["UserId"]);
+            {
+                auto balance = GetCore().GetUserbalance(j["UserId"]);
+                reply_ = balance.first + " RUB, " + balance.second + " USD";
+            }
             else if (reqType == Requests::AddRequestSale)
                 reply_ = GetCore().AddRequestSale(j["UserId"], j["Count"], j["Price"]);
             else if (reqType == Requests::AddRequestPurchase)
                 reply_ = GetCore().AddRequestPurchase(j["UserId"], j["Count"], j["Price"]);
+
+            if (reqType == Requests::AddRequestSale || reqType == Requests::AddRequestPurchase)
+            {
+                std::vector<DealData> deals = GetCore().ExecuteRequests();
+
+                for (const DealData& deal : deals)
+                {
+                    double amount = deal.count * deal.price;
+                    purchase_reply_ = "You bought " + std::to_string(deal.count) + " USD for" + std::to_string(amount) + " RUB";
+                    sale_reply_ = "You sold " + std::to_string(deal.count) + " USD for" + std::to_string(amount) + " RUB";
+
+//                    boost::asio::async_write(socket_, //Надо посылать юзерам по Id, соответсвенно каждому нужен свой сокет
+//                        boost::asio::buffer(reply_, reply_.size()),
+//                        boost::bind(&session::handle_write, this,
+//                            boost::asio::placeholders::error));
+                }
+            }
+
 
             boost::asio::async_write(socket_,
                 boost::asio::buffer(reply_, reply_.size()),
@@ -449,7 +493,10 @@ public:
 
 private:
     std::string reply_;
-    tcp::socket socket_;
+    std::string purchase_reply_;
+    std::string sale_reply_;
+
+    tcp::socket socket_; // на каждого клиента по сокету
     enum { max_length = 1024 };
     char data_[max_length];
 };
@@ -493,8 +540,6 @@ private:
 
 int main()
 {
-    std::system("chcp 1251");
-
     try
     {
         boost::asio::io_service io_service;
