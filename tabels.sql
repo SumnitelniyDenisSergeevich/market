@@ -1,6 +1,6 @@
 -- Table: public.users_log_pus
 
--- DROP TABLE IF EXISTS public.users_log_pus;
+DROP TABLE IF EXISTS public.users_log_pus;
 
 CREATE TABLE IF NOT EXISTS public.users_log_pus
 (
@@ -17,7 +17,7 @@ ALTER TABLE IF EXISTS public.users_log_pus
 
 -- Table: public.user_balance
 
--- DROP TABLE IF EXISTS public.user_balance;
+DROP TABLE IF EXISTS public.user_balance;
 
 CREATE TABLE IF NOT EXISTS public.user_balance
 (
@@ -39,7 +39,7 @@ ALTER TABLE IF EXISTS public.user_balance
 
 -- Table: public.request_purchase_sale
 
--- DROP TABLE IF EXISTS public.request_purchase_sale;
+DROP TABLE IF EXISTS public.request_purchase_sale;
 
 CREATE TABLE IF NOT EXISTS public.request_purchase_sale
 (
@@ -63,7 +63,7 @@ ALTER TABLE IF EXISTS public.request_purchase_sale
 
 -- Table: public.transaction_history
 
--- DROP TABLE IF EXISTS public.transaction_history;
+DROP TABLE IF EXISTS public.transaction_history;
 
 CREATE TABLE IF NOT EXISTS public.transaction_history
 (

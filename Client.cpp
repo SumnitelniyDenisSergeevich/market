@@ -1,5 +1,6 @@
 #include <iostream>
 #include <boost/asio.hpp>
+#include <boost/bind/bind.hpp>
 
 #include "Common.hpp"
 #include "json.hpp"
@@ -21,6 +22,7 @@ void SendMessage(
     std::string request = req.dump();
     boost::asio::write(aSocket, boost::asio::buffer(request, request.size()));
 }
+
 void SendLogMessage(
     tcp::socket& aSocket,
     const std::string& aId,
@@ -78,8 +80,13 @@ std::string ProcessRegistration(tcp::socket& aSocket)
     std::cin >> password;
 
     // Для регистрации Id не нужен, заполним его нулём
-    SendLogMessage(aSocket, "0", Requests::Registration, name, password);
+
     return ReadMessage(aSocket);
+}
+
+void RegistrateFeedback(tcp::socket& s, std::string my_id)
+{
+    SendMessage(s, my_id, Requests::SFeedBackReg, "");
 }
 
 // "Входим" в аккаунт пользвателя.
@@ -116,6 +123,54 @@ std::string ProcessAddRequest(tcp::socket& aSocket, const std::string& id, const
     return ReadMessage(aSocket);
 }
 
+class ServerFeedback
+{
+public:
+    ServerFeedback(boost::asio::io_service& io)
+        : s_feedback_(io)
+    {
+    }
+
+    void Start()
+    {
+        s_feedback_.async_read_some(boost::asio::buffer(data_, max_length),
+            boost::bind(&ServerFeedback::handle_read, this,
+                boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
+    }
+
+    tcp::socket& Socket()
+    {
+        return s_feedback_;
+    }
+
+    void handle_read(const boost::system::error_code& error,
+                     size_t bytes_transferred)
+    {
+        if (!error)
+        {
+            data_[bytes_transferred] = '\0';
+
+            std::cout << "data come!!!!!!!" << std::endl;
+            std::cout << data_ << std::endl;
+
+            s_feedback_.async_read_some(boost::asio::buffer(data_, max_length),
+                boost::bind(&ServerFeedback::handle_read, this,
+                    boost::asio::placeholders::error,
+                    boost::asio::placeholders::bytes_transferred));
+        }
+        else
+        {
+            std::cout << "EROR" << std::endl;
+        }
+    }
+
+private:
+    tcp::socket s_feedback_;
+    enum { max_length = 1024 };
+    char data_[max_length];
+};
+
 int main()
 {
     try
@@ -138,7 +193,7 @@ int main()
                 "1) Log In\n"
                 "2) Registration\n"
                 "3) Exit\n"
-                << "> " << std::endl;
+                << "> ";
 
             std::cin >> menu_option_num;
 
@@ -166,6 +221,12 @@ int main()
             }
         }
 
+        ServerFeedback feedback(io_service);
+
+        feedback.Socket().connect(*iterator);
+        RegistrateFeedback(feedback.Socket(), my_id);
+        feedback.Start();
+
         while (true)
         {
             // Тут реализовано "бесконечное" меню.
@@ -174,7 +235,7 @@ int main()
                 "2) Add Request for sale\n"
                 "3) Add Request for purchase\n"
                 "4) Exit\n"
-                << std::endl;
+                "> ";
 
             std::cin >> menu_option_num;
             switch (menu_option_num)
@@ -205,6 +266,7 @@ int main()
                 std::cout << "Unknown menu option\n" << std::endl;
             }
             }
+
         }
     }
     catch (std::exception& e)

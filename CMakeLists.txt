@@ -18,7 +18,7 @@ INCLUDE_DIRECTORIES(${PostgreSQL_INCLUDE_DIRS})
 
 SET(CMAKE_CXX_STANDARD 17)
 
-ADD_EXECUTABLE(Server Server.cpp Common.hpp json.hpp)
+ADD_EXECUTABLE(Server ServerMain.cpp Core.h Core.cpp Session.h Session.cpp Server.cpp Server.h Common.hpp json.hpp)
 TARGET_LINK_LIBRARIES(Server PRIVATE Threads::Threads ${Boost_LIBRARIES} PRIVATE ${PostgreSQL_LIBRARIES})
 
 ADD_EXECUTABLE(Client Client.cpp Common.hpp json.hpp)
