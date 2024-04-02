@@ -1,6 +1,7 @@
 #include <iostream>
 #include <boost/asio.hpp>
 #include <boost/bind/bind.hpp>
+#include <boost/thread.hpp>
 
 #include "Common.hpp"
 #include "json.hpp"
@@ -226,6 +227,8 @@ int main()
         feedback.Socket().connect(*iterator);
         RegistrateFeedback(feedback.Socket(), my_id);
         feedback.Start();
+
+        boost::thread ClientThread(boost::bind(&boost::asio::io_service::run, &io_service));
 
         while (true)
         {
