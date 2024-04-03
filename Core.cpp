@@ -4,23 +4,6 @@
 #include <cstring>
 #include <map>
 
-namespace
-{
-    struct ReqData
-    {
-        int user_id;
-        int count;
-        double price;
-        std::string req_id;
-    };
-
-    struct BalanceChanges
-    {
-        double income;
-        int count;
-    };
-}
-
 Core::Core()
 {
     const char* conninfo = "dbname=stock_market user=market_admin password=1 host=localhost port=5432";
@@ -43,11 +26,7 @@ std::string Core::RegisterNewUser(const std::string& login, const std::string& p
     std::string result = "0";
     std::string query_str = "SELECT id FROM public.users_log_pus WHERE login = '" + login + "';";
 
-    char* query = new char[query_str.length() + 1];
-    strcpy(query, query_str.c_str());
-
-    PGresult* res = PQexec(db_conn_, query);
-    delete[] query;
+    PGresult* res = ExecuteDBQueryResponse(query_str);
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_TUPLES_OK)
@@ -56,22 +35,16 @@ std::string Core::RegisterNewUser(const std::string& login, const std::string& p
         if (!rows)
         {
             query_str = "INSERT INTO public.users_log_pus(login, password) VALUES('" + login + "','" + password +"');";
-            query = new char[query_str.length() + 1];
-            strcpy(query, query_str.c_str());
-            PQexec(db_conn_, query);
-            delete[] query;
+            ExecuteDBQuery(query_str);
 
             std::cout << "User: " << login << " is Trying To Registered\n";
             result = LogIn(login, password);
 
             query_str = "INSERT INTO public.user_balance(user_id)	VALUES (" + result + ") ;";
-            query = new char[query_str.length() + 1];
-            strcpy(query, query_str.c_str());
-            PQexec(db_conn_, query);
-            delete[] query;
+            ExecuteDBQuery(query_str);
         }
     }
-    PQclear(res);//mb need to clear in if
+    PQclear(res);
 
     return result;
 }
@@ -81,11 +54,7 @@ std::string Core::LogIn(const std::string& login, const std::string& password)
     std::string result = "0";
     std::string query_str = "SELECT id FROM public.users_log_pus WHERE login = '" + login + "' AND password = '" + password + "'; ";
 
-    char* query = new char[query_str.length() + 1];
-    strcpy(query, query_str.c_str());
-
-    PGresult* res = PQexec(db_conn_, query);
-    delete[] query;
+    PGresult* res = ExecuteDBQueryResponse(query_str);
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_TUPLES_OK)
@@ -107,11 +76,8 @@ std::pair<std::string, std::string> Core::GetUserbalance(const std::string& aUse
 {
     std::pair<std::string, std::string> result;
     std::string query_str = "SELECT balance, usd_count FROM public.user_balance WHERE user_id = " + aUserId + ";";
-    char* query = new char[query_str.length() + 1];
-    strcpy(query, query_str.c_str());
 
-    PGresult* res = PQexec(db_conn_, query);
-    delete[] query;
+    PGresult* res = ExecuteDBQueryResponse(query_str);
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_TUPLES_OK)
@@ -155,11 +121,8 @@ std::string Core::AddRequestPurchase(const std::string& aUserId, const std::stri
 bool Core::AddRequest(const std::string& request)
 {
     bool result = false;
-    char* query = new char[request.length() + 1];
-    strcpy(query, request.c_str());
-    PGresult* res = PQexec(db_conn_, query);
-    delete[] query;
 
+    PGresult* res = ExecuteDBQueryResponse(request);
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_COMMAND_OK)
@@ -171,81 +134,13 @@ bool Core::AddRequest(const std::string& request)
 
 std::vector<DealData> Core::ExecuteRequests()
 {
-    std::string result;
-    std::string query_str = "SELECT "            //Беру в БД только заявки на закупки, сортирую по убыванию доллара и по возрастанию даты
-                            "   id, "
-                            "   user_id, "
-                            "   dollar_price, "
-                            "   dollars_count "
-                            "FROM public.request_purchase_sale "
-                            "WHERE "
-                            "   sale = false "
-                            "ORDER BY "
-                            "   dollar_price DESC, "
-                            "   request_date;";
+    std::vector<ReqData> purchase_req = DBExecuteRequests(false);
+    std::vector<ReqData> sale_req = DBExecuteRequests(true);
 
-    char* query = new char[query_str.length() + 1];
-    strcpy(query, query_str.c_str());
-
-    PGresult* res = PQexec(db_conn_, query);
-    delete[] query;
-
-    ExecStatusType resStatus = PQresultStatus(res);
-
-    std::vector<ReqData> purchase_req;//отсортированы в нужном порядке
-
-    if (resStatus == PGRES_TUPLES_OK)
-    {
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++)
-        {
-            std::string user_id{ PQgetvalue(res, i, 1) };
-            std::string price  { PQgetvalue(res, i, 2) };
-            std::string count  { PQgetvalue(res, i, 3) };
-            purchase_req.push_back(ReqData{ std::stoi(user_id), std::stoi(count), std::stod(price) , PQgetvalue(res, i, 0) });
-        }
-    }
-    PQclear(res);
-
-    query_str = "SELECT "            //Беру в БД только заявки на продажу, сортирую по возрастанию доллара и по возрастанию даты
-                "   id, "
-                "   user_id, "
-                "   dollar_price, "
-                "   dollars_count "
-                "FROM public.request_purchase_sale "
-                "WHERE "
-                "   sale = true "
-                "ORDER BY "
-                "   dollar_price ASC, "
-                "   request_date;";
-
-    query = new char[query_str.length() + 1];
-    strcpy(query, query_str.c_str());
-
-    res = PQexec(db_conn_, query);
-    delete[] query;
-
-    resStatus = PQresultStatus(res);
-
-    std::vector<ReqData> sale_req;//отсортированы в нужном порядке
-
-    if (resStatus == PGRES_TUPLES_OK)
-    {
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++)
-        {
-            std::string user_id{ PQgetvalue(res, i, 1) };
-            std::string price  { PQgetvalue(res, i, 2) };
-            std::string count  { PQgetvalue(res, i, 3) };
-            sale_req.push_back(ReqData{ std::stoi(user_id), std::stoi(count), std::stod(price) , PQgetvalue(res, i, 0) });
-        }
-    }
-    PQclear(res);
-
-
+    //Выполнение запросов
     std::vector<DealData> deals;//для подсчета баланса и заполнения истории
-    std::vector<std::string> delete_req;
-    std::map<std::string, int> req_id_count;
+    std::vector<std::string> delete_req;//Закрытые запросы
+    std::map<std::string, int> req_id_count;//Потенциальные запросы на обновление
 
     for (auto pur_iter = purchase_req.begin(); pur_iter != purchase_req.end(); ++pur_iter)
         for (auto sale_iter = sale_req.begin(); sale_iter != sale_req.end(); ++sale_iter)
@@ -289,20 +184,84 @@ std::vector<DealData> Core::ExecuteRequests()
             deals.push_back(deal);
         }
 
-    //Удаление заявок
+    for (const std::string& id : delete_req)// Удаляю лишние заявки, которые не надо будет обновлять
+    {
+        auto iter = req_id_count.find(id);
+        if (iter != req_id_count.end())
+            req_id_count.erase(iter);
+    }
+
+    DeleteCompletedRequests(delete_req);
+    UpdateRequests(req_id_count);
+    UpdateBalance(deals);
+
+    return deals;//Для отправки писем пользователям, о совершении сделки
+}
+
+void Core::ExecuteDBQuery(const std::string& query_str)
+{
+    char* query = new char[query_str.length() + 1];
+    strcpy(query, query_str.c_str());
+    PGresult* res = PQexec(db_conn_, query);
+    delete[] query;
+    PQclear(res);
+}
+
+PGresult* Core::ExecuteDBQueryResponse(const std::string& query_str)
+{
+    char* query = new char[query_str.length() + 1];
+    strcpy(query, query_str.c_str());
+    PGresult* res = PQexec(db_conn_, query);
+    delete[] query;
+    return res;
+}
+
+std::vector<ReqData> Core::DBExecuteRequests(bool for_sale)
+{
+    std::string query_str = "SELECT "
+                            "   id, "
+                            "   user_id, "
+                            "   dollar_price, "
+                            "   dollars_count "
+                            "FROM public.request_purchase_sale "
+                            "WHERE "
+                            "   sale = ";
+    query_str += (for_sale ? "true" : "false" );
+    query_str += " "
+                 "ORDER BY "
+                 "   dollar_price DESC, "
+                 "   request_date;";
+
+    PGresult* res = ExecuteDBQueryResponse(query_str);
+    ExecStatusType resStatus = PQresultStatus(res);
+
+    std::vector<ReqData> request;
+
+    if (resStatus == PGRES_TUPLES_OK)
+    {
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++)
+        {
+            std::string user_id{ PQgetvalue(res, i, 1) };
+            std::string price  { PQgetvalue(res, i, 2) };
+            std::string count  { PQgetvalue(res, i, 3) };
+            request.push_back(ReqData{ std::stoi(user_id), std::stoi(count), std::stod(price) , PQgetvalue(res, i, 0) });
+        }
+    }
+    PQclear(res);
+
+    return request;
+}
+
+void Core::DeleteCompletedRequests(const std::vector<std::string>& delete_req)
+{
     if (delete_req.size())
     {
-        query_str = "DELETE FROM public.request_purchase_sale WHERE id = ";
+        std::string query_str = "DELETE FROM public.request_purchase_sale WHERE id = ";
         bool first = true;
-
-
 
         for (const std::string& id : delete_req)
         {
-            auto iter = req_id_count.find(id);
-            if (iter != req_id_count.end())// Удаляю лишние заявки, которые не надо будет обновлять
-                req_id_count.erase(iter);
-
             if (first)
                 query_str += id;
             else
@@ -310,33 +269,29 @@ std::vector<DealData> Core::ExecuteRequests()
             first = false;
         }
 
-        query = new char[query_str.length() + 1];
-        strcpy(query, query_str.c_str());
-        res = PQexec(db_conn_, query);
-        delete[] query;
-        PQclear(res);
+        ExecuteDBQuery(query_str);
     }
+}
 
-    //Исправление заявки
+void Core::UpdateRequests(const std::map<std::string, int>& req_id_count)
+{
     for (const auto [id, count] : req_id_count)
     {
-        query_str = "UPDATE public.request_purchase_sale "
+        std::string query_str = "UPDATE public.request_purchase_sale "
             "SET dollars_count = " + std::to_string(count) + " "
             "WHERE id = " + id + "; ";
 
-        query = new char[query_str.length() + 1];
-        strcpy(query, query_str.c_str());
-        res = PQexec(db_conn_, query);
-        delete[] query;
-        PQclear(res);
+        ExecuteDBQuery(query_str);
     }
-//============================= Изменение баланса пользователей =======================
+}
 
-    std::map<int, BalanceChanges> user_id_income; //Обрабатываю массив, что бы посылать на 1 юзера не более одного запроса
+std::map<int, BalanceChanges> Core::UpdateTransactionHistory(const std::vector<DealData>& deals)
+{
+    std::map<int, BalanceChanges> user_id_income; //Создаю дату, что бы посылать на 1 юзера не более одного запроса
 
     if (!deals.empty())
     {
-        query_str = "INSERT INTO public.transaction_history(buyer_id, seller_id, dollar_price, dollars_count) VALUES";
+        std::string query_str = "INSERT INTO public.transaction_history(buyer_id, seller_id, dollar_price, dollars_count) VALUES";
         bool first = true;
         for (const DealData& deal : deals) // впихнуть LOG
         {
@@ -355,29 +310,91 @@ std::vector<DealData> Core::ExecuteRequests()
             first = false;
         }
 
-        query = new char[query_str.length() + 1];
-        strcpy(query, query_str.c_str());
-        res = PQexec(db_conn_, query);
-        delete[] query;
-        PQclear(res);
+        ExecuteDBQuery(query_str);
     }
+    return user_id_income;
+}
 
+void Core::UpdateBalance(const std::vector<DealData>& deals)
+{
+    std::map<int, BalanceChanges> user_id_income = UpdateTransactionHistory(deals);
     for (const auto [id, balance_changes] : user_id_income)//Изменение баланса пользователей
     {
         std::string user_id = std::to_string(id);
         auto balance_count = GetUserbalance(user_id);
 
-        query_str = "UPDATE public.user_balance "
+        std::string query_str = "UPDATE public.user_balance "
             "SET usd_count = " + std::to_string(stoi(balance_count.second) + balance_changes.count) + ", "
             "    balance = " + std::to_string(stod(balance_count.first) + balance_changes.income) + " "
             "WHERE user_id = " + user_id + "; ";
 
-        query = new char[query_str.length() + 1];
-        strcpy(query, query_str.c_str());
-        res = PQexec(db_conn_, query);
-        delete[] query;
-        PQclear(res);
+        ExecuteDBQuery(query_str);
     }
-
-    return deals;//Для отправки писем пользователям, о совершении сделки
 }
+
+void GetActiveRequests()
+{
+    std::string query_str = "SELECT "
+                            "    REQ.id, "
+                            "    USR.login, "
+                            "    REQ.dollar_price, "
+                            "    REQ.dollars_count, "
+                            "    CASE WHEN REQ.sale = true THEN 'sells' "
+                            "         ELSE 'buys' "
+                            "    END "
+                            "FROM public.request_purchase_sale AS REQ "
+                            "    JOIN public.users_log_pus AS USR ON REQ.user_id = USR.id "
+                            "ORDER BY "
+                            "    REQ.request_date;";
+}
+
+void GetActiveUserRequests(const std::string& aUserId)
+{
+    std::string query_str = "SELECT "
+                            "    id, "
+                            "    dollar_price, "
+                            "    dollars_count, "
+                            "    CASE WHEN sale = true THEN 'sells' "
+                            "         ELSE 'buys' "
+                            "    END "
+                            "FROM public.request_purchase_sale "
+                            "WHERE "
+                            "    user_id = " + aUserId + " "
+                            "ORDER BY "
+                            "    request_date;";
+
+}
+
+void GetCompletedDeals(const std::string& aUserId)
+{
+    std::string query_str = "SELECT "
+                            "    BUYER.login, "
+                            "    SELLER.login, "
+                            "    HIST.dollar_price, "
+                            "    HIST.dollars_count "
+                            "FROM public.transaction_history AS HIST "
+                            "    JOIN public.users_log_pus AS BUYER "
+                            "        ON HIST.buyer_id = BUYER.id "
+                            "    JOIN public.users_log_pus AS SELLER "
+                            "        ON HIST.seller_id = SELLER.id "
+                            "WHERE "
+                            "    HIST.buyer_id = " + aUserId + " OR HIST.seller_id = " + aUserId + "; ";
+}
+
+void GetUSDQuotes()
+{
+    std::string query_str = "SELECT AVG(dollar_price) " //Среднее значение цены доллара для покупки( за сколько готовы купить в среднем)
+                            "    FROM public.request_purchase_sale "
+                            "WHERE "
+                            "    sale = false;";
+}
+
+void CancelRequest(const std::string& aUserId, const std::string req_id)
+{
+    std::string query_str = "DELETE FROM public.request_purchase_sale "
+                            "WHERE id = (SELECT id FROM public.request_purchase_sale "
+                            "               WHERE id = " + req_id + "  AND user_id = " + aUserId + " );";
+
+}
+
+void LogOut(const std::string& aUserId);//-

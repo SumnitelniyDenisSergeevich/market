@@ -68,6 +68,26 @@ void session::handle_read(const boost::system::error_code& error,
             auto balance = core_.GetUserbalance(j["UserId"]);
             reply_ = balance.first + " RUB, " + balance.second + " USD";
         }
+        else if (reqType == Requests::ActiveRequests)
+        {
+
+        }
+        else if (reqType == Requests::CompletedTransactions)
+        {
+
+        }
+        else if (reqType == Requests::USDQuotes)
+        {
+
+        }
+        else if (reqType == Requests::LogOut)// Разрешить вход, удалить из notify списка
+        {
+
+        }
+        else if (reqType == Requests::CancelReq)
+        {
+
+        }
 
         if (reqType == Requests::Registration || reqType == Requests::LogIn)
             user_id_ = stoi(reply_);

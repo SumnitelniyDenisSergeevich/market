@@ -50,16 +50,14 @@ void Server::SendNotificationsAboutTransactions(std::vector<DealData> deals)
 
         if (buyer_session)
         {
-            purchase_reply_ = "You bought " + std::to_string(deal.count) + " USD for " + std::to_string(amount) + " RUB";
-            std::cout << purchase_reply_ << std::endl;
+            purchase_reply_ = "Notification: You bought " + std::to_string(deal.count) + " USD for " + std::to_string(amount) + " RUB;\n";
             boost::asio::async_write(buyer_session->socket(),
                 boost::asio::buffer(purchase_reply_, purchase_reply_.size()),
                 boost::bind(&Server::handle_write, this, boost::asio::placeholders::error));
         }
         if (seller_session)
         {
-            sale_reply_ = "You sold " + std::to_string(deal.count) + " USD for " + std::to_string(amount) + " RUB";
-            std::cout << sale_reply_ << std::endl;
+            sale_reply_ = "Notification: You sold " + std::to_string(deal.count) + " USD for " + std::to_string(amount) + " RUB;\n";
             boost::asio::async_write(seller_session->socket(),
                 boost::asio::buffer(sale_reply_, sale_reply_.size()),
                 boost::bind(&Server::handle_write, this, boost::asio::placeholders::error));

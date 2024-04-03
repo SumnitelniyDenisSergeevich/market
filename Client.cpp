@@ -81,7 +81,7 @@ std::string ProcessRegistration(tcp::socket& aSocket)
     std::cin >> password;
 
     // Для регистрации Id не нужен, заполним его нулём
-
+    SendLogMessage(aSocket, "0", Requests::Registration, name, password);
     return ReadMessage(aSocket);
 }
 
@@ -119,7 +119,6 @@ std::string ProcessAddRequest(tcp::socket& aSocket, const std::string& id, const
     std::cout << "Specify the price for one dollar: ";
     std::cin >> dollar_price;
 
-
     SendRequestMessage(aSocket, id, aRequestType, dollars_count, dollar_price);
     return ReadMessage(aSocket);
 }
@@ -129,8 +128,7 @@ class ServerFeedback
 public:
     ServerFeedback(boost::asio::io_service& io)
         : s_feedback_(io)
-    {
-    }
+    {    }
 
     void Start()
     {
@@ -151,18 +149,12 @@ public:
         if (!error)
         {
             data_[bytes_transferred] = '\0';
-
-            std::cout << "data come!!!!!!!" << std::endl;
-            std::cout << data_ << std::endl;
+            std::cout << data_ << "\n";
 
             s_feedback_.async_read_some(boost::asio::buffer(data_, max_length),
                 boost::bind(&ServerFeedback::handle_read, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
-        }
-        else
-        {
-            std::cout << "EROR" << std::endl;
         }
     }
 
@@ -234,40 +226,65 @@ int main()
         {
             // Тут реализовано "бесконечное" меню.
             std::cout << "Menu:\n"
-                "1) Balance Request\n"
-                "2) Add Request for sale\n"
-                "3) Add Request for purchase\n"
-                "4) Exit\n"
+                "1) Balance Request.\n"
+                "2) Add Request for sale.\n"
+                "3) Add Request for purchase.\n"
+                "4) View active requests.\n"
+                "5) Cancel request.\n"
+                "6) My completed deals.\n"
+                "7) View the history of USD quotes.\n"
+                "8) Exit\n"
                 "> ";
 
             std::cin >> menu_option_num;
             switch (menu_option_num)
             {
-            case 1:
+                case 1:
+                {
+                    SendMessage(s, my_id, Requests::Balance, "");
+                    std::cout << "Your balance is: " << ReadMessage(s) << "!\n";
+                    break;
+                }
+                case 2:
+                {
+                    std::cout << ProcessAddRequest(s, my_id, Requests::AddRequestSale) << "\n";
+                    break;
+                }
+                case 3:
+                {
+                    std::cout << ProcessAddRequest(s, my_id, Requests::AddRequestPurchase) << "\n";
+                    break;
+                }
+            case 4://View active requests
             {
-                SendMessage(s, my_id, Requests::Balance, "");
-                std::cout << "Your balance is: " << ReadMessage(s) << "!\n";
+                SendMessage(s, my_id, Requests::ActiveRequests, "");
                 break;
             }
-            case 2:
+            case 5://View active requests
             {
-                std::cout << ProcessAddRequest(s, my_id, Requests::AddRequestSale) << "\n";
+                SendMessage(s, my_id, Requests::CancelReq, "");
                 break;
             }
-            case 3:
+            case 6://My completed deals
             {
-                std::cout << ProcessAddRequest(s, my_id, Requests::AddRequestPurchase) << "\n";
+                SendMessage(s, my_id, Requests::CompletedTransactions, "");
                 break;
             }
-            case 4:
+            case 7://View the history of USD quotes
             {
+                SendMessage(s, my_id, Requests::USDQuotes, "");
+                break;
+            }
+            case 8:
+            {
+                SendMessage(s, my_id, Requests::LogOut, "");
                 exit(0);
                 break;
             }
-            default:
-            {
-                std::cout << "Unknown menu option\n" << std::endl;
-            }
+                default:
+                {
+                    std::cout << "Unknown menu option\n" << std::endl;
+                }
             }
 
         }

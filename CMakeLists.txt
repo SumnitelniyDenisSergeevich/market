@@ -10,6 +10,8 @@ PROJECT(ClienServerEcn)
 #set(PostgreSQL_LIBRARIES "e:/Postgre_sql/lib/libpq.lib")
 
 FIND_PACKAGE(Boost 1.40 COMPONENTS system REQUIRED)
+FIND_PACKAGE(Boost 1.40 COMPONENTS thread REQUIRED)
+
 FIND_PACKAGE(Threads REQUIRED)
 FIND_PACKAGE(PostgreSQL REQUIRED)
 
