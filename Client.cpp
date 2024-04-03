@@ -123,6 +123,47 @@ std::string ProcessAddRequest(tcp::socket& aSocket, const std::string& id, const
     return ReadMessage(aSocket);
 }
 
+void PrintTable(tcp::socket& aSocket, const std::string& rows_count_str, const std::vector<std::string>& columns)
+{
+    int rows_count = std::stoi(rows_count_str);
+
+    if (rows_count)
+    {
+        std::cout << std::endl << std::string(columns.size() * 15 + columns.size() + 1, '-') << std::endl;
+        for (std::string column : columns)
+            std::cout << '|' << std::setw(15) << std::left << column;
+        std::cout << '|' << std::endl << std::string(columns.size() * 15 + columns.size() + 1, '-') << std::endl;
+
+        int i = 0;
+        std::string str = "";
+
+        while (i != rows_count)
+        {
+            str += ReadMessage(aSocket);
+
+            size_t s_pos = str.find('{');
+            size_t e_pos = str.find('}');
+        
+            while (e_pos != std::string::npos)
+            {
+                ++i;
+                std::string line = str.substr(s_pos, e_pos - s_pos + 1);
+
+                nlohmann::json d = nlohmann::json::parse(line);
+                for (std::string column : columns)
+                    std::cout << '|' << std::setw(15) << std::left << d[column].template get<std::string>();
+                std::cout << '|' << std::endl;
+
+                s_pos = str.find('{', e_pos);
+                e_pos = str.find('}', s_pos);
+            }
+            if (i != rows_count)
+                str = str.substr(s_pos);
+        }
+        std::cout << std::string(columns.size() * 15 + columns.size(), '-') << std::endl << std::endl;
+    }
+}
+
 class ServerFeedback
 {
 public:
@@ -230,10 +271,11 @@ int main()
                 "2) Add Request for sale.\n"
                 "3) Add Request for purchase.\n"
                 "4) View active requests.\n"
-                "5) Cancel request.\n"
-                "6) My completed deals.\n"
-                "7) View the history of USD quotes.\n"
-                "8) Exit\n"
+                "5) My activer requests. \n"
+                "6) Cancel request.\n"
+                "7) My completed deals.\n"
+                "8) View the history of USD quotes.\n"
+                "9) Exit\n"
                 "> ";
 
             std::cin >> menu_option_num;
@@ -242,7 +284,7 @@ int main()
                 case 1:
                 {
                     SendMessage(s, my_id, Requests::Balance, "");
-                    std::cout << "Your balance is: " << ReadMessage(s) << "!\n";
+                    std::cout << ReadMessage(s) << "!\n";
                     break;
                 }
                 case 2:
@@ -258,24 +300,31 @@ int main()
             case 4://View active requests
             {
                 SendMessage(s, my_id, Requests::ActiveRequests, "");
+                std::vector<std::string> columns{ "req_id", "user_login", "d_price", "d_count", "side" };
+                PrintTable(s, ReadMessage(s), std::move(columns));
                 break;
             }
             case 5://View active requests
             {
+                SendMessage(s, my_id, Requests::MyActiveRequests, "");
+                break;
+            }
+            case 6://View active requests
+            {
                 SendMessage(s, my_id, Requests::CancelReq, "");
                 break;
             }
-            case 6://My completed deals
+            case 7://My completed deals
             {
                 SendMessage(s, my_id, Requests::CompletedTransactions, "");
                 break;
             }
-            case 7://View the history of USD quotes
+            case 8://View the history of USD quotes
             {
                 SendMessage(s, my_id, Requests::USDQuotes, "");
                 break;
             }
-            case 8:
+            case 9:
             {
                 SendMessage(s, my_id, Requests::LogOut, "");
                 exit(0);

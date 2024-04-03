@@ -13,6 +13,7 @@ namespace Requests
     static std::string Registration          = "Reg";
     static std::string SFeedBackReg          = "SFeedBackReg";
     static std::string ActiveRequests        = "ActiveRequests";
+    static std::string MyActiveRequests      = "MyActiveRequests";
     static std::string CompletedTransactions = "CompletedTransactions";
     static std::string USDQuotes             = "USDQuotes";
     static std::string LogOut                = "LogOut";

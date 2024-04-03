@@ -1,5 +1,6 @@
 #include "Core.h"
 
+
 #include <iostream>
 #include <cstring>
 #include <map>
@@ -34,6 +35,7 @@ std::string Core::RegisterNewUser(const std::string& login, const std::string& p
         int rows = PQntuples(res);
         if (!rows)
         {
+            db_mutex_.lock();            
             query_str = "INSERT INTO public.users_log_pus(login, password) VALUES('" + login + "','" + password +"');";
             ExecuteDBQuery(query_str);
 
@@ -42,6 +44,7 @@ std::string Core::RegisterNewUser(const std::string& login, const std::string& p
 
             query_str = "INSERT INTO public.user_balance(user_id)	VALUES (" + result + ") ;";
             ExecuteDBQuery(query_str);
+            db_mutex_.unlock();
         }
     }
     PQclear(res);
@@ -53,8 +56,9 @@ std::string Core::LogIn(const std::string& login, const std::string& password)
 {
     std::string result = "0";
     std::string query_str = "SELECT id FROM public.users_log_pus WHERE login = '" + login + "' AND password = '" + password + "'; ";
-
+    db_mutex_.lock_shared();
     PGresult* res = ExecuteDBQueryResponse(query_str);
+    db_mutex_.unlock_shared();
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_TUPLES_OK)
@@ -76,8 +80,9 @@ std::pair<std::string, std::string> Core::GetUserbalance(const std::string& aUse
 {
     std::pair<std::string, std::string> result;
     std::string query_str = "SELECT balance, usd_count FROM public.user_balance WHERE user_id = " + aUserId + ";";
-
+    db_mutex_.lock_shared();
     PGresult* res = ExecuteDBQueryResponse(query_str);
+    db_mutex_.unlock_shared();
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_TUPLES_OK)
@@ -111,18 +116,19 @@ std::string Core::AddRequestPurchase(const std::string& aUserId, const std::stri
 {
     std::string result = "Failed to create a request";
     std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count) VALUES(" + aUserId + ", " + price + " , " + count + " ); ";
-
+    
     if (AddRequest(query_str))
         result = "Request has been created";
-
+    
     return result;
 }
 
 bool Core::AddRequest(const std::string& request)
 {
     bool result = false;
-
+    db_mutex_.lock();
     PGresult* res = ExecuteDBQueryResponse(request);
+    db_mutex_.unlock();
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_COMMAND_OK)
@@ -232,7 +238,9 @@ std::vector<ReqData> Core::DBExecuteRequests(bool for_sale)
                  "   dollar_price DESC, "
                  "   request_date;";
 
+    db_mutex_.lock_shared();
     PGresult* res = ExecuteDBQueryResponse(query_str);
+    db_mutex_.unlock_shared();
     ExecStatusType resStatus = PQresultStatus(res);
 
     std::vector<ReqData> request;
@@ -268,8 +276,9 @@ void Core::DeleteCompletedRequests(const std::vector<std::string>& delete_req)
                 query_str += " OR id = " + id;
             first = false;
         }
-
+        db_mutex_.lock();
         ExecuteDBQuery(query_str);
+        db_mutex_.unlock();
     }
 }
 
@@ -280,8 +289,9 @@ void Core::UpdateRequests(const std::map<std::string, int>& req_id_count)
         std::string query_str = "UPDATE public.request_purchase_sale "
             "SET dollars_count = " + std::to_string(count) + " "
             "WHERE id = " + id + "; ";
-
+        db_mutex_.lock();
         ExecuteDBQuery(query_str);
+        db_mutex_.unlock();
     }
 }
 
@@ -309,8 +319,9 @@ std::map<int, BalanceChanges> Core::UpdateTransactionHistory(const std::vector<D
 
             first = false;
         }
-
+        db_mutex_.lock();
         ExecuteDBQuery(query_str);
+        db_mutex_.unlock();
     }
     return user_id_income;
 }
@@ -327,12 +338,13 @@ void Core::UpdateBalance(const std::vector<DealData>& deals)
             "SET usd_count = " + std::to_string(stoi(balance_count.second) + balance_changes.count) + ", "
             "    balance = " + std::to_string(stod(balance_count.first) + balance_changes.income) + " "
             "WHERE user_id = " + user_id + "; ";
-
+        db_mutex_.lock();
         ExecuteDBQuery(query_str);
+        db_mutex_.unlock();
     }
 }
 
-void GetActiveRequests()
+std::vector<nlohmann::json> Core::GetActiveRequests()
 {
     std::string query_str = "SELECT "
                             "    REQ.id, "
@@ -346,9 +358,33 @@ void GetActiveRequests()
                             "    JOIN public.users_log_pus AS USR ON REQ.user_id = USR.id "
                             "ORDER BY "
                             "    REQ.request_date;";
+    db_mutex_.lock_shared();
+    PGresult* res = ExecuteDBQueryResponse(query_str);
+    db_mutex_.unlock_shared();
+    ExecStatusType resStatus = PQresultStatus(res);
+    std::vector<nlohmann::json> requests;
+
+    if (resStatus == PGRES_TUPLES_OK)
+    {
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++)
+        {
+            nlohmann::json req;
+            req["req_id"]     = std::string{ PQgetvalue(res, i, 0) };
+            req["user_login"] = std::string{ PQgetvalue(res, i, 1) };
+            req["d_count"]    = std::string{ PQgetvalue(res, i, 3) };
+            req["d_price"]    = std::string{ PQgetvalue(res, i, 2) };
+            req["side"]       = std::string{ PQgetvalue(res, i, 4) };
+
+            requests.push_back(req);            
+        }
+    }
+    PQclear(res);
+
+    return requests;
 }
 
-void GetActiveUserRequests(const std::string& aUserId)
+void Core::GetActiveUserRequests(const std::string& aUserId)
 {
     std::string query_str = "SELECT "
                             "    id, "
@@ -363,9 +399,12 @@ void GetActiveUserRequests(const std::string& aUserId)
                             "ORDER BY "
                             "    request_date;";
 
+    db_mutex_.lock_shared();
+    db_mutex_.unlock_shared();
+
 }
 
-void GetCompletedDeals(const std::string& aUserId)
+void Core::GetCompletedDeals(const std::string& aUserId)
 {
     std::string query_str = "SELECT "
                             "    BUYER.login, "
@@ -379,22 +418,33 @@ void GetCompletedDeals(const std::string& aUserId)
                             "        ON HIST.seller_id = SELLER.id "
                             "WHERE "
                             "    HIST.buyer_id = " + aUserId + " OR HIST.seller_id = " + aUserId + "; ";
+    db_mutex_.lock_shared();
+    db_mutex_.unlock_shared();
 }
 
-void GetUSDQuotes()
+void Core::GetUSDQuotes()
 {
     std::string query_str = "SELECT AVG(dollar_price) " //Среднее значение цены доллара для покупки( за сколько готовы купить в среднем)
                             "    FROM public.request_purchase_sale "
                             "WHERE "
                             "    sale = false;";
+    db_mutex_.lock_shared();
+    db_mutex_.unlock_shared();
 }
 
-void CancelRequest(const std::string& aUserId, const std::string req_id)
+void Core::CancelRequest(const std::string& aUserId, const std::string req_id)
 {
     std::string query_str = "DELETE FROM public.request_purchase_sale "
                             "WHERE id = (SELECT id FROM public.request_purchase_sale "
                             "               WHERE id = " + req_id + "  AND user_id = " + aUserId + " );";
 
+    db_mutex_.lock();
+    db_mutex_.unlock();
 }
 
-void LogOut(const std::string& aUserId);//-
+void Core::LogOut(const std::string& aUserId)
+{
+
+    db_mutex_.lock();
+    db_mutex_.unlock();
+}

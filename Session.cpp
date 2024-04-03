@@ -37,6 +37,51 @@ void session::start()
             boost::asio::placeholders::bytes_transferred));
 }
 
+void session::handle_write_table(const boost::system::error_code& error)
+{
+    if (!error)
+    {
+        
+    }
+    else
+    {
+        delete this;
+    }
+}
+
+//void session::handle_read_table(const boost::system::error_code& error, size_t bytes_transferred)
+//{
+//    if (!error)
+//    {
+//
+//    }
+//    else
+//    {
+//        delete this;
+//    }
+//}
+
+void session::SendTable(std::vector<nlohmann::json> data)
+{
+    //shared_buffer data_size(std::to_string(data.size()));
+
+    std::string data_size = std::to_string(data.size());
+
+    boost::asio::async_write(socket_,
+        boost::asio::buffer(data_size.c_str(), data_size.size()),
+        boost::bind(&session::handle_write_table, this,
+            boost::asio::placeholders::error));
+
+    for (nlohmann::json req : data)
+    {
+        std::string str = req.dump();
+        boost::asio::async_write(socket_,
+            boost::asio::buffer(str.c_str(), str.size()),
+            boost::bind(&session::handle_write_table, this,//попробую с этим обработчиком
+                boost::asio::placeholders::error));
+    }    
+}
+
 void session::handle_read(const boost::system::error_code& error,
     size_t bytes_transferred)
 {
@@ -49,7 +94,7 @@ void session::handle_read(const boost::system::error_code& error,
 
         auto reqType = j["ReqType"];
 
-        reply_ = "Error! Unknown request type";
+        std::string reply_ = "Error! Unknown request type";
         if (reqType == Requests::Registration)
             reply_ = core_.RegisterNewUser(j["Login"], j["Password"]);
         else if (reqType == Requests::LogIn)
@@ -66,11 +111,12 @@ void session::handle_read(const boost::system::error_code& error,
         else if (reqType == Requests::Balance)
         {
             auto balance = core_.GetUserbalance(j["UserId"]);
-            reply_ = balance.first + " RUB, " + balance.second + " USD";
+            reply_ = "Your balance is: " + balance.first + " RUB, " + balance.second + " USD";
         }
         else if (reqType == Requests::ActiveRequests)
         {
-
+            std::vector<nlohmann::json> requests = core_.GetActiveRequests();
+            SendTable(requests);
         }
         else if (reqType == Requests::CompletedTransactions)
         {
@@ -97,7 +143,7 @@ void session::handle_read(const boost::system::error_code& error,
 
         if (reqType != Requests::SFeedBackReg)
             boost::asio::async_write(socket_,
-                boost::asio::buffer(reply_, reply_.size()),//не успевал создаваться, закинул в private
+                boost::asio::buffer(reply_.c_str(), reply_.size()),//не успевал создаваться, закинул в private
                 boost::bind(&session::handle_write, this,
                     boost::asio::placeholders::error));
     }

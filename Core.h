@@ -4,8 +4,10 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <shared_mutex>
 
 #include "Common.hpp"
+#include "json.hpp"
 
 namespace  {
     struct ReqData
@@ -29,32 +31,25 @@ public:
     Core();
     ~Core();
 
-//    "4) View active requests.\n"
-//    "5) Cancel request.\n"
-//    "6) My completed deals.\n"
-//    "7) View the history of USD quotes.\n"
-//    "8) Exit\n"
-
-public://возможно только чтение из БД
+public:
     std::pair<std::string, std::string> GetUserbalance(const std::string& aUserId);
-
-    void GetActiveRequests();//-
+    std::vector<nlohmann::json> GetActiveRequests();//-
     void GetActiveUserRequests(const std::string& aUserId);//-
     void GetCompletedDeals(const std::string& aUserId);//-
     void GetUSDQuotes();//-
 
-public://возможно изменение БД
+public:
     std::string RegisterNewUser(const std::string& login, const std::string& password);
     std::string LogIn(const std::string& login, const std::string& password);
     std::string AddRequestSale(const std::string& aUserId, const std::string& count, const std::string& price);
-    std::string AddRequestPurchase(const std::string& aUserId, const std::string& count, const std::string& price);
-    bool AddRequest(const std::string& request);
+    std::string AddRequestPurchase(const std::string& aUserId, const std::string& count, const std::string& price);    
     std::vector<DealData> ExecuteRequests();
 
     void CancelRequest(const std::string& aUserId, const std::string req_id);//-
     void LogOut(const std::string& aUserId);//-
 
-private://DB
+private:
+    bool AddRequest(const std::string& request);
     void ExecuteDBQuery(const std::string& query_str);
     PGresult* ExecuteDBQueryResponse(const std::string& query_str);
     std::vector<ReqData> DBExecuteRequests(bool for_sale);
@@ -65,4 +60,5 @@ private://DB
 
 private:
     PGconn* db_conn_;
+    std::shared_mutex db_mutex_;
 };
