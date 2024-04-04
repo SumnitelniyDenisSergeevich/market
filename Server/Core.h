@@ -1,13 +1,11 @@
 #pragma once
 
 #include <libpq-fe.h>
-#include <string>
 #include <vector>
 #include <map>
 #include <shared_mutex>
 
 #include "Common.hpp"
-#include "json.hpp"
 
 namespace  {
     struct ReqData
@@ -33,20 +31,19 @@ public:
 
 public:
     std::pair<std::string, std::string> GetUserbalance(const std::string& aUserId);
-    std::vector<std::string> GetActiveRequests();//-
-    std::vector<std::string> GetActiveUserRequests(const std::string& aUserId);//-
-    std::vector<std::string>  GetCompletedDeals(const std::string& aUserId);//-
-    std::string GetUSDQuotes();//-
+    std::vector<std::string> GetActiveRequests();
+    std::vector<std::string> GetActiveUserRequests(const std::string& aUserId);
+    std::vector<std::string>  GetCompletedDeals(const std::string& aUserId);
+    std::string GetUSDQuotes();
 
-public:
+public://mutable
     std::string RegisterNewUser(const std::string& login, const std::string& password);
     std::string LogIn(const std::string& login, const std::string& password);
     std::string AddRequestSale(const std::string& aUserId, const std::string& count, const std::string& price);
     std::string AddRequestPurchase(const std::string& aUserId, const std::string& count, const std::string& price);    
     std::vector<DealData> ExecuteRequests();
-
-    std::string CancelRequest(const std::string& aUserId, const std::string req_id);//-
-    void LogOut(const std::string& aUserId);//-
+    std::string CancelRequest(const std::string& aUserId, const std::string req_id);
+    void LogOut(const std::string& aUserId);
 
 private:
     bool AddRequest(const std::string& request);

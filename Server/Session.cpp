@@ -1,56 +1,55 @@
-
 #include <boost/bind/bind.hpp>
-
-#include "Session.h"
-#include "Core.h"
-#include "Common.hpp"
-#include "json.hpp"
-#include <string>
-#include "Server.h"
-
 #include <iostream>
+#include <string>
 
-Core session::core_;
+#include "Server.h"
+#include "Session.h"
+#include "json.hpp"
 
-session::session(boost::asio::io_service& io_service, Server* serv)
+Core Session::core_;
+
+Session::Session(boost::asio::io_service& io_service, Server* serv)
     : user_id_(0)
     , socket_(io_service)
     , server_(serv)
 {
 }
 
-tcp::socket& session::socket()
+tcp::socket& Session::Socket()
 {
     return socket_;
 }
 
-int session::UserId()
-{
-    return user_id_;
-}
-
-void session::start()
+void Session::start()
 {
     socket_.async_read_some(boost::asio::buffer(data_, max_length),
-        boost::bind(&session::handle_read, this,
+        boost::bind(&Session::handle_read, this,
             boost::asio::placeholders::error,
             boost::asio::placeholders::bytes_transferred));
 }
 
-void session::handle_write_table(const std::vector<std::string> &data, const boost::system::error_code& error)
+void Session::SendTable(const std::vector<std::string>& data)
+{
+    std::string data_size = std::to_string(data.size());
+
+    boost::asio::async_write(socket_,
+        boost::asio::buffer(data_size.c_str(), data_size.size()),
+        boost::bind(&Session::handle_write_table, this, std::move(data),
+            boost::asio::placeholders::error));
+}
+
+void Session::handle_write_table(const std::vector<std::string> &data, const boost::system::error_code& error)
 {
     if (!error)
     {
         if (data.size())
-        {
             socket_.async_read_some(boost::asio::buffer(data_, max_length),
-                boost::bind(&session::handle_read_table, this, data,
+                boost::bind(&Session::handle_read_table, this, std::move(data),
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
-        }
         else
             socket_.async_read_some(boost::asio::buffer(data_, max_length),
-                boost::bind(&session::handle_read, this,
+                boost::bind(&Session::handle_read, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
     }
@@ -60,7 +59,7 @@ void session::handle_write_table(const std::vector<std::string> &data, const boo
     }
 }
 
-void session::handle_read_table(const std::vector<std::string>& data, const boost::system::error_code& error, size_t bytes_transferred)
+void Session::handle_read_table(const std::vector<std::string>& data, const boost::system::error_code& error, size_t bytes_transferred)
 {
     if (!error)
     {
@@ -68,11 +67,11 @@ void session::handle_read_table(const std::vector<std::string>& data, const boos
         {
             boost::asio::async_write(socket_,
                 boost::asio::buffer(req.c_str(), req.size()),
-                boost::bind(&session::handle_write_str, this,
+                boost::bind(&Session::handle_write_str, this,
                     boost::asio::placeholders::error));
         }
         socket_.async_read_some(boost::asio::buffer(data_, max_length),
-            boost::bind(&session::handle_read, this,
+            boost::bind(&Session::handle_read, this,
                 boost::asio::placeholders::error,
                 boost::asio::placeholders::bytes_transferred));
     }
@@ -82,92 +81,87 @@ void session::handle_read_table(const std::vector<std::string>& data, const boos
     }
 }
 
-void session::handle_write_str(const boost::system::error_code& error)
+void Session::handle_write_str(const boost::system::error_code& error)
 {
-
+    if (error)
+        delete this;
 }
 
-void session::SendTable(const std::vector<std::string>& data)
-{
-    std::string data_size = std::to_string(data.size());
-
-    boost::asio::async_write(socket_,
-        boost::asio::buffer(data_size.c_str(), data_size.size()),
-        boost::bind(&session::handle_write_table, this, data,
-            boost::asio::placeholders::error));
-}
-
-void session::handle_read(const boost::system::error_code& error,
+void Session::handle_read(const boost::system::error_code& error,
     size_t bytes_transferred)
 {
     if (!error)
     {
         data_[bytes_transferred] = '\0';
-
-        // Парсим json, который пришёл нам в сообщении.
         auto j = nlohmann::json::parse(data_);
-
         auto reqType = j["ReqType"];
 
-        std::string reply_ = "Error! Unknown request type";
+        std::string reply = "Error! Unknown request type";
         if (reqType == Requests::Registration)
-            reply_ = core_.RegisterNewUser(j["Login"], j["Password"]);
+            reply = core_.RegisterNewUser(j["Login"], j["Password"]);
         else if (reqType == Requests::LogIn)
-            reply_ = core_.LogIn(j["Login"], j["Password"]);
+            reply = core_.LogIn(j["Login"], j["Password"]);
         else if (reqType == Requests::AddRequestSale)
-            reply_ = core_.AddRequestSale(j["UserId"], j["Count"], j["Price"]);
+        {
+            std::cout << "UserId: " << user_id_ << " add sale request" << std::endl;
+            reply = core_.AddRequestSale(j["UserId"], j["Count"], j["Price"]);
+        }
         else if (reqType == Requests::AddRequestPurchase)
-            reply_ = core_.AddRequestPurchase(j["UserId"], j["Count"], j["Price"]);
+        {
+            std::cout << "UserId: " << user_id_ << " add purchase request" << std::endl;
+            reply = core_.AddRequestPurchase(j["UserId"], j["Count"], j["Price"]);
+        }
+        else if (reqType == Requests::CancelReq)
+            reply = core_.CancelRequest(j["UserId"], j["Message"]);
+        else if (reqType == Requests::USDQuotes)
+        {
+            std::cout << "UserId: " << user_id_ << " asked husd quotes" << std::endl;
+            reply = core_.GetUSDQuotes();
+        }
         else if (reqType == Requests::SFeedBackReg)
-        {
-            server_->RegFeedbackSession(std::stoi(std::string{j["UserId"]}), this);
-            std::cout << "REG FEEDBACK SESSION" << std::endl;
-        }
-        else if (reqType == Requests::Balance)
-        {
-            auto balance = core_.GetUserbalance(j["UserId"]);
-            reply_ = "Your balance is: " + balance.first + " RUB, " + balance.second + " USD";
-        }
+            server_->RegFeedbackSession(user_id_, this);
         else if (reqType == Requests::ActiveRequests)
         {
-            std::vector<std::string> requests = core_.GetActiveRequests();
-            SendTable(requests);
+            std::cout << "UserId: " << user_id_ << " asked active requests" << std::endl;
+            SendTable(core_.GetActiveRequests());
         }
         else if (reqType == Requests::MyActiveRequests)
         {
-            std::vector<std::string> requests = core_.GetActiveUserRequests(j["UserId"]);
-            SendTable(requests);
+            std::cout << "UserId: " << user_id_ << " asked his requests" << std::endl;
+            SendTable(core_.GetActiveUserRequests(j["UserId"]));
         }
         else if (reqType == Requests::CompletedTransactions)
         {
-            std::vector<std::string> requests = core_.GetCompletedDeals(j["UserId"]);
-            SendTable(requests);
+            std::cout << "UserId: " << user_id_ << " asked his deals" << std::endl;
+            SendTable(core_.GetCompletedDeals(j["UserId"]));
         }
-        else if (reqType == Requests::USDQuotes)
+        else if (reqType == Requests::Balance)
         {
-                reply_ = core_.GetUSDQuotes();
-        }
-        else if (reqType == Requests::LogOut)// Разрешить вход, удалить из notify списка
+            std::cout << "UserId: " << user_id_ << " asked balance" << std::endl;
+            auto balance = core_.GetUserbalance(j["UserId"]);
+            reply = "Your balance is: " + balance.first + " RUB, " + balance.second + " USD";
+        }        
+        else if (reqType == Requests::LogOut)
         {
+            std::cout << "UserId: " << user_id_ << " log out" << std::endl;
             core_.LogOut(j["UserId"]);
-        }
-        else if (reqType == Requests::CancelReq)
-        {
-            reply_ = core_.CancelRequest(j["UserId"], j["Message"]);
+            server_->CloseFeedbackSession(user_id_);
         }
 
         if (reqType == Requests::Registration || reqType == Requests::LogIn)
-            user_id_ = stoi(reply_);
+            user_id_ = stoi(reply);
 
         if (reqType == Requests::AddRequestSale || reqType == Requests::AddRequestPurchase)
             server_->SendNotificationsAboutTransactions(core_.ExecuteRequests());
 
         if (reqType != Requests::SFeedBackReg && reqType != Requests::ActiveRequests &&
                 reqType != Requests::MyActiveRequests && reqType != Requests::CompletedTransactions)
+        {
             boost::asio::async_write(socket_,
-                boost::asio::buffer(reply_.c_str(), reply_.size()),//не успевал создаваться, закинул в private
-                boost::bind(&session::handle_write, this,
+                boost::asio::buffer(reply.c_str(), reply.size()),
+                boost::bind(&Session::handle_write, this,
                     boost::asio::placeholders::error));
+        }
     }
     else
     {
@@ -175,12 +169,12 @@ void session::handle_read(const boost::system::error_code& error,
     }
 }
 
-void session::handle_write(const boost::system::error_code& error)
+void Session::handle_write(const boost::system::error_code& error)
 {
     if (!error)
     {
         socket_.async_read_some(boost::asio::buffer(data_, max_length),
-            boost::bind(&session::handle_read, this,
+            boost::bind(&Session::handle_read, this,
                 boost::asio::placeholders::error,
                 boost::asio::placeholders::bytes_transferred));
     }

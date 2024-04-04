@@ -1,9 +1,8 @@
-#include "Core.h"
-
-
 #include <iostream>
-#include <cstring>
 #include <map>
+
+#include "Core.h"
+#include "json.hpp"
 
 Core::Core()
 {
@@ -35,7 +34,9 @@ std::string Core::RegisterNewUser(const std::string& login, const std::string& p
     std::string result = "0";
     std::string query_str = "SELECT id FROM public.users_log_pus WHERE login = '" + login + "';";
 
+    db_mutex_.lock_shared();
     PGresult* res = ExecuteDBQueryResponse(query_str);
+    db_mutex_.unlock_shared();
     ExecStatusType resStatus = PQresultStatus(res);
 
     if (resStatus == PGRES_TUPLES_OK)
@@ -43,14 +44,16 @@ std::string Core::RegisterNewUser(const std::string& login, const std::string& p
         int rows = PQntuples(res);
         if (!rows)
         {
-            db_mutex_.lock();            
+            std::cout << "User " << login << " registered" << std::endl;
             query_str = "INSERT INTO public.users_log_pus(login, password) VALUES('" + login + "','" + password +"');";
+            db_mutex_.lock();
             ExecuteDBQuery(query_str);
+            db_mutex_.unlock();
 
-            std::cout << "User: " << login << " is Trying To Registered\n";
             result = LogIn(login, password);
 
             query_str = "INSERT INTO public.user_balance(user_id)	VALUES (" + result + ") ;";
+            db_mutex_.lock();
             ExecuteDBQuery(query_str);
             db_mutex_.unlock();
         }
@@ -110,8 +113,7 @@ std::pair<std::string, std::string> Core::GetUserbalance(const std::string& aUse
         {
             std::string balance{ PQgetvalue(res, 0, 0) };
             std::string usd_count{ PQgetvalue(res, 0, 1) };
-            result = std::make_pair(balance, usd_count);
-            std::cout << "UserId: " << aUserId << " asked Balance\n";
+            result = std::make_pair(balance, usd_count);            
         }
     }
     PQclear(res);
@@ -145,11 +147,12 @@ bool Core::AddRequest(const std::string& request)
 {
     bool result = false;
     db_mutex_.lock();
-    PGresult* res = ExecuteDBQueryResponse(request);
+    PGresult* res = ExecuteDBQueryResponse(request);    
     db_mutex_.unlock();
+    char* inserted_rows_count = PQcmdTuples(res);// память отчистится в PQclear
     ExecStatusType resStatus = PQresultStatus(res);
 
-    if (resStatus == PGRES_COMMAND_OK)
+    if (resStatus == PGRES_COMMAND_OK && std::stoi(inserted_rows_count) == 1)
         result = true;
 
     PQclear(res);
@@ -516,12 +519,26 @@ std::string Core::CancelRequest(const std::string& aUserId, const std::string re
                             "               WHERE id = " + req_id + "  AND user_id = " + aUserId + " );";
 
     db_mutex_.lock();
-    PGresult* res = ExecuteDBQueryResponse(query_str);
+    PGresult* res = ExecuteDBQueryResponse(query_str);    
     db_mutex_.unlock();
+    char* deleted_rows_count = PQcmdTuples(res);// память отчистится в PQclear
     ExecStatusType resStatus = PQresultStatus(res);
     PQclear(res);
 
-    return resStatus == PGRES_COMMAND_OK ? "Request canceled" : "Request not canceled";
+    std::string result;
+
+    if (resStatus == PGRES_COMMAND_OK && std::stoi(deleted_rows_count) == 1)
+    {
+        std::cout << "UserId: " << aUserId << " canceled request" << req_id << std::endl;
+        result = "Request canceled";
+    }
+    else
+    {
+        std::cout << "UserId: " << aUserId << " not canceled request" << req_id << std::endl;
+        result = "Request not canceled";
+    }
+
+    return result;
 }
 
 void Core::LogOut(const std::string& aUserId)//В Qt Gui можно поставить на закрытие приложения

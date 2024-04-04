@@ -18,6 +18,7 @@ namespace Requests
     static std::string USDQuotes             = "USDQuotes";
     static std::string LogOut                = "LogOut";
     static std::string CancelReq             = "CancelReq";
+    static std::string RecivedRowsCount      = "RecivedRowsCount";
 }
 
 struct DealData

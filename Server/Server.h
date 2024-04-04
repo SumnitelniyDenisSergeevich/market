@@ -6,7 +6,7 @@
 #include "Common.hpp"
 
 using boost::asio::ip::tcp;
-class session;
+class Session;
 
 class Server
 {
@@ -14,19 +14,20 @@ public:
     Server(boost::asio::io_service& io_service);
     ~Server();
 
-    void handle_accept(session* new_session, const boost::system::error_code& error);
-    void handle_write(const boost::system::error_code& error);
+public:
     void SendNotificationsAboutTransactions(std::vector<DealData> deals);
-    void RegFeedbackSession(int user_id, session* s);
+    void RegFeedbackSession(int user_id, Session* s);
+    void CloseFeedbackSession(int user_id);
 
 private:
-    session* FindFeedbackSession(int user_id);
+    Session* FindFeedbackSession(int user_id);
 
 private:
-    std::string purchase_reply_;
-    std::string sale_reply_;
+    void handle_accept(Session* new_session, const boost::system::error_code& error);
+    void handle_write(const boost::system::error_code& error);
 
-    std::map<int, session*> id_session;
+private:
+    std::map<int, Session*> id_session_;
     boost::asio::io_service& io_service_;
     tcp::acceptor acceptor_;
 };

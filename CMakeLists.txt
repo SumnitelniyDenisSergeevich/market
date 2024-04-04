@@ -16,6 +16,6 @@ ADD_EXECUTABLE(Server Server/ServerMain.cpp Server/Core.h Server/Core.cpp Server
 TARGET_LINK_LIBRARIES(Server PRIVATE Threads::Threads ${Boost_LIBRARIES} PRIVATE ${PostgreSQL_LIBRARIES})
 target_include_directories(Server PRIVATE Server/ Common/)
 
-ADD_EXECUTABLE(Client Client/Client.cpp Common/Common.hpp Common/json.hpp)
+ADD_EXECUTABLE(Client Client/Client.cpp Client/ServerFeedBack.h Client/ServerFeedBack.cpp Common/Common.hpp Common/json.hpp)
 TARGET_LINK_LIBRARIES(Client PRIVATE Threads::Threads ${Boost_LIBRARIES})
 target_include_directories(Client PRIVATE Client/ Common/)
