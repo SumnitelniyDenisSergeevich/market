@@ -37,11 +37,14 @@ void session::start()
             boost::asio::placeholders::bytes_transferred));
 }
 
-void session::handle_write_table(const boost::system::error_code& error)
+void session::handle_write_table(const std::vector<std::string> &data, const boost::system::error_code& error)
 {
     if (!error)
     {
-        
+        socket_.async_read_some(boost::asio::buffer(data_, max_length),
+            boost::bind(&session::handle_read_table, this, data,
+                boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
     }
     else
     {
@@ -49,37 +52,40 @@ void session::handle_write_table(const boost::system::error_code& error)
     }
 }
 
-//void session::handle_read_table(const boost::system::error_code& error, size_t bytes_transferred)
-//{
-//    if (!error)
-//    {
-//
-//    }
-//    else
-//    {
-//        delete this;
-//    }
-//}
-
-void session::SendTable(std::vector<nlohmann::json> data)
+void session::handle_read_table(const std::vector<std::string>& data, const boost::system::error_code& error, size_t bytes_transferred)
 {
-    //shared_buffer data_size(std::to_string(data.size()));
+    if (!error)
+    {
+        for (std::string req : data)
+        {
+            boost::asio::async_write(socket_,
+                boost::asio::buffer(req.c_str(), req.size()),
+                boost::bind(&session::handle_write_str, this,
+                    boost::asio::placeholders::error));
+        }
+    }
+    else
+    {
+        delete this;
+    }
+}
 
+void session::handle_write_str(const boost::system::error_code& error)
+{
+
+}
+
+void session::SendTable(const std::vector<std::string>& data)
+{
+    if (data.size())
+    {
     std::string data_size = std::to_string(data.size());
 
     boost::asio::async_write(socket_,
         boost::asio::buffer(data_size.c_str(), data_size.size()),
-        boost::bind(&session::handle_write_table, this,
+        boost::bind(&session::handle_write_table, this, data,
             boost::asio::placeholders::error));
-
-    for (nlohmann::json req : data)
-    {
-        std::string str = req.dump();
-        boost::asio::async_write(socket_,
-            boost::asio::buffer(str.c_str(), str.size()),
-            boost::bind(&session::handle_write_table, this,//попробую с этим обработчиком
-                boost::asio::placeholders::error));
-    }    
+    }
 }
 
 void session::handle_read(const boost::system::error_code& error,
@@ -115,24 +121,30 @@ void session::handle_read(const boost::system::error_code& error,
         }
         else if (reqType == Requests::ActiveRequests)
         {
-            std::vector<nlohmann::json> requests = core_.GetActiveRequests();
+            std::vector<std::string> requests = core_.GetActiveRequests();
+            SendTable(requests);
+        }
+        else if (reqType == Requests::MyActiveRequests)
+        {
+            std::vector<std::string> requests = core_.GetActiveUserRequests(j["UserId"]);
             SendTable(requests);
         }
         else if (reqType == Requests::CompletedTransactions)
         {
-
+            std::vector<std::string> requests = core_.GetCompletedDeals(j["UserId"]);
+            SendTable(requests);
         }
         else if (reqType == Requests::USDQuotes)
         {
-
+                reply_ = core_.GetUSDQuotes();
         }
-        else if (reqType == Requests::LogOut)// Разрешить вход, удалить из notify списка
-        {
-
-        }
+    else if (reqType == Requests::LogOut)// Разрешить вход, удалить из notify списка
+    {
+        core_.LogOut(j["UserId"]);
+    }
         else if (reqType == Requests::CancelReq)
         {
-
+            reply_ = core_.CancelRequest(j["UserId"], j["Message"]);
         }
 
         if (reqType == Requests::Registration || reqType == Requests::LogIn)

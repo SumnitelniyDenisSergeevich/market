@@ -14,7 +14,15 @@ Core::Core()
     if (PQstatus(db_conn_) != CONNECTION_OK)
         throw PQerrorMessage(db_conn_);
     else
+    {
         std::cout << "db stock_market connect\n";
+
+        std::string query_str = "UPDATE public.users_log_pusSET online=false";
+
+        db_mutex_.lock();
+        ExecuteDBQuery(query_str);
+        db_mutex_.unlock();
+    }
 }
 
 Core::~Core()
@@ -55,7 +63,7 @@ std::string Core::RegisterNewUser(const std::string& login, const std::string& p
 std::string Core::LogIn(const std::string& login, const std::string& password)
 {
     std::string result = "0";
-    std::string query_str = "SELECT id FROM public.users_log_pus WHERE login = '" + login + "' AND password = '" + password + "'; ";
+    std::string query_str = "SELECT id, online FROM public.users_log_pus WHERE login = '" + login + "' AND password = '" + password + "' AND online = false; ";
     db_mutex_.lock_shared();
     PGresult* res = ExecuteDBQueryResponse(query_str);
     db_mutex_.unlock_shared();
@@ -72,6 +80,16 @@ std::string Core::LogIn(const std::string& login, const std::string& password)
         }
     }
     PQclear(res);
+
+    if (result != "0")
+    {
+        query_str = "UPDATE public.users_log_pus "
+                            "SET online=true "
+                            "WHERE id = " + result + ";";
+        db_mutex_.lock();
+        ExecuteDBQuery(query_str);
+        db_mutex_.unlock();
+    }
 
     return result;
 }
@@ -344,7 +362,7 @@ void Core::UpdateBalance(const std::vector<DealData>& deals)
     }
 }
 
-std::vector<nlohmann::json> Core::GetActiveRequests()
+std::vector<std::string> Core::GetActiveRequests()
 {
     std::string query_str = "SELECT "
                             "    REQ.id, "
@@ -362,7 +380,7 @@ std::vector<nlohmann::json> Core::GetActiveRequests()
     PGresult* res = ExecuteDBQueryResponse(query_str);
     db_mutex_.unlock_shared();
     ExecStatusType resStatus = PQresultStatus(res);
-    std::vector<nlohmann::json> requests;
+    std::vector<std::string> requests;
 
     if (resStatus == PGRES_TUPLES_OK)
     {
@@ -376,7 +394,7 @@ std::vector<nlohmann::json> Core::GetActiveRequests()
             req["d_price"]    = std::string{ PQgetvalue(res, i, 2) };
             req["side"]       = std::string{ PQgetvalue(res, i, 4) };
 
-            requests.push_back(req);            
+            requests.push_back(req.dump());
         }
     }
     PQclear(res);
@@ -384,14 +402,14 @@ std::vector<nlohmann::json> Core::GetActiveRequests()
     return requests;
 }
 
-void Core::GetActiveUserRequests(const std::string& aUserId)
+std::vector<std::string> Core::GetActiveUserRequests(const std::string& aUserId)
 {
     std::string query_str = "SELECT "
                             "    id, "
                             "    dollar_price, "
                             "    dollars_count, "
-                            "    CASE WHEN sale = true THEN 'sells' "
-                            "         ELSE 'buys' "
+                            "    CASE WHEN sale = true THEN 'sell' "
+                            "         ELSE 'buy' "
                             "    END "
                             "FROM public.request_purchase_sale "
                             "WHERE "
@@ -400,11 +418,31 @@ void Core::GetActiveUserRequests(const std::string& aUserId)
                             "    request_date;";
 
     db_mutex_.lock_shared();
+    PGresult* res = ExecuteDBQueryResponse(query_str);
     db_mutex_.unlock_shared();
+    ExecStatusType resStatus = PQresultStatus(res);
+    std::vector<std::string> requests;
 
+    if (resStatus == PGRES_TUPLES_OK)
+    {
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++)
+        {
+            nlohmann::json req;
+            req["req_id"]     = std::string{ PQgetvalue(res, i, 0) };
+            req["d_count"]    = std::string{ PQgetvalue(res, i, 2) };
+            req["d_price"]    = std::string{ PQgetvalue(res, i, 1) };
+            req["side"]       = std::string{ PQgetvalue(res, i, 3) };
+
+            requests.push_back(req.dump());
+        }
+    }
+    PQclear(res);
+
+    return requests;
 }
 
-void Core::GetCompletedDeals(const std::string& aUserId)
+std::vector<std::string> Core::GetCompletedDeals(const std::string& aUserId)
 {
     std::string query_str = "SELECT "
                             "    BUYER.login, "
@@ -418,33 +456,80 @@ void Core::GetCompletedDeals(const std::string& aUserId)
                             "        ON HIST.seller_id = SELLER.id "
                             "WHERE "
                             "    HIST.buyer_id = " + aUserId + " OR HIST.seller_id = " + aUserId + "; ";
+
     db_mutex_.lock_shared();
+    PGresult* res = ExecuteDBQueryResponse(query_str);
     db_mutex_.unlock_shared();
+    ExecStatusType resStatus = PQresultStatus(res);
+    std::vector<std::string> requests;
+
+    if (resStatus == PGRES_TUPLES_OK)
+    {
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++)
+        {
+            nlohmann::json req;
+            req["Buyer"]     = std::string{ PQgetvalue(res, i, 0) };
+            req["Seller"]    = std::string{ PQgetvalue(res, i, 1) };
+            req["d_price"]    = std::string{ PQgetvalue(res, i, 2) };
+            req["d_count"]    = std::string{ PQgetvalue(res, i, 3) };
+
+            requests.push_back(req.dump());
+        }
+    }
+    PQclear(res);
+
+    return requests;
 }
 
-void Core::GetUSDQuotes()
+std::string Core::GetUSDQuotes()
 {
-    std::string query_str = "SELECT AVG(dollar_price) " //Среднее значение цены доллара для покупки( за сколько готовы купить в среднем)
+    std::string query_str = "SELECT AVG(dollar_price) " //Среднее значение цены доллара для покупки( за сколько готовы купить в среднем) переработать
                             "    FROM public.request_purchase_sale "
                             "WHERE "
                             "    sale = false;";
+
     db_mutex_.lock_shared();
+    PGresult* res = ExecuteDBQueryResponse(query_str);
     db_mutex_.unlock_shared();
+    ExecStatusType resStatus = PQresultStatus(res);
+
+    std::string result;
+    if (resStatus == PGRES_TUPLES_OK)
+    {
+        int rows = PQntuples(res);
+        if (rows)
+            result = PQgetvalue(res, 0, 0);
+    }
+
+    if (result.empty())
+        result = "0";
+
+    PQclear(res);
+    return result;
 }
 
-void Core::CancelRequest(const std::string& aUserId, const std::string req_id)
+std::string Core::CancelRequest(const std::string& aUserId, const std::string req_id)
 {
     std::string query_str = "DELETE FROM public.request_purchase_sale "
                             "WHERE id = (SELECT id FROM public.request_purchase_sale "
                             "               WHERE id = " + req_id + "  AND user_id = " + aUserId + " );";
 
     db_mutex_.lock();
+    PGresult* res = ExecuteDBQueryResponse(query_str);
     db_mutex_.unlock();
+    ExecStatusType resStatus = PQresultStatus(res);
+    PQclear(res);
+
+    return resStatus == PGRES_COMMAND_OK ? "Request canceled" : "Request not canceled";
 }
 
-void Core::LogOut(const std::string& aUserId)
+void Core::LogOut(const std::string& aUserId)//В Qt Gui можно поставить на закрытие приложения
 {
-
+    std::string query_str = "UPDATE public.users_log_pus "
+                            "SET online=false "
+                            "WHERE id = " + aUserId + ";";
     db_mutex_.lock();
+    ExecuteDBQuery(query_str);
     db_mutex_.unlock();
 }

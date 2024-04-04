@@ -33,10 +33,10 @@ public:
 
 public:
     std::pair<std::string, std::string> GetUserbalance(const std::string& aUserId);
-    std::vector<nlohmann::json> GetActiveRequests();//-
-    void GetActiveUserRequests(const std::string& aUserId);//-
-    void GetCompletedDeals(const std::string& aUserId);//-
-    void GetUSDQuotes();//-
+    std::vector<std::string> GetActiveRequests();//-
+    std::vector<std::string> GetActiveUserRequests(const std::string& aUserId);//-
+    std::vector<std::string>  GetCompletedDeals(const std::string& aUserId);//-
+    std::string GetUSDQuotes();//-
 
 public:
     std::string RegisterNewUser(const std::string& login, const std::string& password);
@@ -45,7 +45,7 @@ public:
     std::string AddRequestPurchase(const std::string& aUserId, const std::string& count, const std::string& price);    
     std::vector<DealData> ExecuteRequests();
 
-    void CancelRequest(const std::string& aUserId, const std::string req_id);//-
+    std::string CancelRequest(const std::string& aUserId, const std::string req_id);//-
     void LogOut(const std::string& aUserId);//-
 
 private:

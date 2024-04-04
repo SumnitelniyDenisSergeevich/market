@@ -7,20 +7,6 @@ using boost::asio::ip::tcp;
 
 class Server;
 
-struct shared_buffer
-{
-    boost::shared_array<char> buff;
-    int size;
-    shared_buffer(const std::string& str) : buff(new char[str.size() + 1]), size(str.size() + 1)
-    {
-        strcpy(buff.get(), str.c_str());
-    }
-    boost::asio::mutable_buffers_1 asio_buff() const
-    {
-        return boost::asio::buffer(buff.get(), size);
-    }
-};
-
 class session //можно сделать вложенным классом, тогда можно будет использовать методы server
 {
 public:
@@ -29,18 +15,18 @@ public:
     void start();
     void handle_read(const boost::system::error_code& error, size_t bytes_transferred);
     void handle_write(const boost::system::error_code& error);
-    void handle_write_table(const boost::system::error_code& error);
-    //void handle_read_table(const boost::system::error_code& error, size_t bytes_transferred);
+    void handle_write_table(const std::vector<std::string>& data, const boost::system::error_code& error);
+    void handle_read_table(const std::vector<std::string>& data, const boost::system::error_code& error, size_t bytes_transferred);
+    void handle_write_str(const boost::system::error_code& error);
 
 public:
     tcp::socket& socket();
     int UserId();
 
 private:
-    void SendTable(std::vector<nlohmann::json> requests);
+    void SendTable(const std::vector<std::string>& data);
 
 private:
-    //std::string reply_;
     int user_id_;
 
     tcp::socket socket_;

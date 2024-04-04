@@ -85,6 +85,15 @@ std::string ProcessRegistration(tcp::socket& aSocket)
     return ReadMessage(aSocket);
 }
 
+std::string ProcessCancelRequest(tcp::socket& s, std::string my_id)
+{
+    std::string req_id;
+    std::cout << "Enter request id: ";
+    std::cin >> req_id;
+    SendMessage(s, my_id, Requests::CancelReq, req_id);
+    return ReadMessage(s);
+}
+
 void RegistrateFeedback(tcp::socket& s, std::string my_id)
 {
     SendMessage(s, my_id, Requests::SFeedBackReg, "");
@@ -126,6 +135,7 @@ std::string ProcessAddRequest(tcp::socket& aSocket, const std::string& id, const
 void PrintTable(tcp::socket& aSocket, const std::string& rows_count_str, const std::vector<std::string>& columns)
 {
     int rows_count = std::stoi(rows_count_str);
+    SendMessage(aSocket, "0", Requests::ActiveRequests, "t");
 
     if (rows_count)
     {
@@ -144,7 +154,7 @@ void PrintTable(tcp::socket& aSocket, const std::string& rows_count_str, const s
             size_t s_pos = str.find('{');
             size_t e_pos = str.find('}');
         
-            while (e_pos != std::string::npos)
+            while (s_pos != std::string::npos && e_pos != std::string::npos)
             {
                 ++i;
                 std::string line = str.substr(s_pos, e_pos - s_pos + 1);
@@ -157,7 +167,9 @@ void PrintTable(tcp::socket& aSocket, const std::string& rows_count_str, const s
                 s_pos = str.find('{', e_pos);
                 e_pos = str.find('}', s_pos);
             }
-            if (i != rows_count)
+            if (s_pos == std::string::npos)
+                str = "";
+            else if (i != rows_count)
                 str = str.substr(s_pos);
         }
         std::cout << std::string(columns.size() * 15 + columns.size(), '-') << std::endl << std::endl;
@@ -297,31 +309,36 @@ int main()
                     std::cout << ProcessAddRequest(s, my_id, Requests::AddRequestPurchase) << "\n";
                     break;
                 }
-            case 4://View active requests
-            {
-                SendMessage(s, my_id, Requests::ActiveRequests, "");
-                std::vector<std::string> columns{ "req_id", "user_login", "d_price", "d_count", "side" };
-                PrintTable(s, ReadMessage(s), std::move(columns));
-                break;
-            }
-            case 5://View active requests
-            {
-                SendMessage(s, my_id, Requests::MyActiveRequests, "");
-                break;
-            }
-            case 6://View active requests
-            {
-                SendMessage(s, my_id, Requests::CancelReq, "");
-                break;
-            }
-            case 7://My completed deals
-            {
-                SendMessage(s, my_id, Requests::CompletedTransactions, "");
-                break;
-            }
+                case 4://View active requests
+                {
+                    SendMessage(s, my_id, Requests::ActiveRequests, "");
+                    std::vector<std::string> columns{ "req_id", "user_login", "d_price", "d_count", "side" };
+                    PrintTable(s, ReadMessage(s), std::move(columns));
+                    break;
+                }
+                case 5://My active requests
+                {
+                    SendMessage(s, my_id, Requests::MyActiveRequests, "");
+                    std::vector<std::string> columns{ "req_id", "d_price", "d_count", "side" };
+                    PrintTable(s, ReadMessage(s), std::move(columns));
+                    break;
+                }
+                case 6://CancelReq
+                {
+                    std::cout << ProcessCancelRequest(s, my_id) << "\n";
+                    break;
+                }
+                case 7://My completed deals
+                {
+                    SendMessage(s, my_id, Requests::CompletedTransactions, "");
+                    std::vector<std::string> columns{ "Buyer", "Seller", "d_price", "d_count" };
+                    PrintTable(s, ReadMessage(s), std::move(columns));
+                    break;
+                }
             case 8://View the history of USD quotes
             {
                 SendMessage(s, my_id, Requests::USDQuotes, "");
+                std::cout << ReadMessage(s) << "\n";
                 break;
             }
             case 9:
