@@ -7,6 +7,8 @@ FIND_PACKAGE(Boost 1.40 COMPONENTS thread REQUIRED)
 FIND_PACKAGE(Threads REQUIRED)
 FIND_PACKAGE(PostgreSQL REQUIRED)
 
+FIND_PACKAGE(GTest)
+
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${PostgreSQL_INCLUDE_DIRS})
 
@@ -19,3 +21,7 @@ target_include_directories(Server PRIVATE Server/ Common/)
 ADD_EXECUTABLE(Client Client/Client.cpp Client/ServerFeedBack.h Client/ServerFeedBack.cpp Common/Common.hpp Common/json.hpp)
 TARGET_LINK_LIBRARIES(Client PRIVATE Threads::Threads ${Boost_LIBRARIES})
 target_include_directories(Client PRIVATE Client/ Common/)
+
+ADD_EXECUTABLE(TestServer TestServer/TestServer.cpp Server/Core.cpp Server/Core.h Common/json.hpp)
+target_link_libraries(TestServer  PRIVATE GTest::GTest  PRIVATE ${PostgreSQL_LIBRARIES})
+target_include_directories(TestServer PRIVATE Server/ Common/)

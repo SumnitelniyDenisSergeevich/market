@@ -26,7 +26,7 @@ namespace  {
 class Core
 {
 public:
-    Core();
+    Core(const char* conninfo);
     ~Core();
 
 public:

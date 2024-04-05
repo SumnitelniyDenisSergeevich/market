@@ -6,7 +6,7 @@
 #include "Session.h"
 #include "json.hpp"
 
-Core Session::core_;
+Core Session::core_("dbname=stock_market user=market_admin password=1 host=localhost port=5432");
 
 Session::Session(boost::asio::io_service& io_service, Server* serv)
     : user_id_(0)

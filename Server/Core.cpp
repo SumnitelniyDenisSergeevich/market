@@ -4,10 +4,8 @@
 #include "Core.h"
 #include "json.hpp"
 
-Core::Core()
+Core::Core(const char *conninfo)
 {
-    const char* conninfo = "dbname=stock_market user=market_admin password=1 host=localhost port=5432";
-
     db_conn_ = PQconnectdb(conninfo);
 
     if (PQstatus(db_conn_) != CONNECTION_OK)
@@ -523,7 +521,6 @@ std::string Core::CancelRequest(const std::string& aUserId, const std::string re
     db_mutex_.unlock();
     char* deleted_rows_count = PQcmdTuples(res);// память отчистится в PQclear
     ExecStatusType resStatus = PQresultStatus(res);
-    PQclear(res);
 
     std::string result;
 
@@ -537,6 +534,8 @@ std::string Core::CancelRequest(const std::string& aUserId, const std::string re
         std::cout << "UserId: " << aUserId << " not canceled request" << req_id << std::endl;
         result = "Request not canceled";
     }
+
+    PQclear(res);
 
     return result;
 }
