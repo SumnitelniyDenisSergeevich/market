@@ -1,13 +1,28 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.16)
 PROJECT(ClienServerEcn)
 
+set(BOOST_ROOT "e:/boost/boost_build_vc143")
+set(Boost_INCLUDE_DIR "e:/boost/boost_build_vc143/include/boost-1_84")
+set(Boost_LIBRARIES "e:/boost/boost_build_vc143/lib")
+
+set(PostgreSQL_INCLUDE_DIRS "e:/Postgre_sql/include")#нужно подключить только libpq-fe.h
+set(PostgreSQL_LIBRARIES "e:/Postgre_sql/lib/libpq.lib")
+
+
+set(PostgreSQL_INCLUDE_DIR "e:/Postgre_sql/include")#нужно подключить только libpq-fe.h
+set(PostgreSQL_LIBRARY "e:/Postgre_sql/lib/libpq.lib")
+
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
 FIND_PACKAGE(Boost 1.40 COMPONENTS system REQUIRED)
 FIND_PACKAGE(Boost 1.40 COMPONENTS thread REQUIRED)
 
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+
 FIND_PACKAGE(Threads REQUIRED)
 FIND_PACKAGE(PostgreSQL REQUIRED)
-
-FIND_PACKAGE(GTest)
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(${PostgreSQL_INCLUDE_DIRS})
@@ -18,10 +33,10 @@ ADD_EXECUTABLE(Server Server/ServerMain.cpp Server/Core.h Server/Core.cpp Server
 TARGET_LINK_LIBRARIES(Server PRIVATE Threads::Threads ${Boost_LIBRARIES} PRIVATE ${PostgreSQL_LIBRARIES})
 target_include_directories(Server PRIVATE Server/ Common/)
 
-ADD_EXECUTABLE(Client Client/Client.cpp Client/ServerFeedBack.h Client/ServerFeedBack.cpp Common/Common.hpp Common/json.hpp)
-TARGET_LINK_LIBRARIES(Client PRIVATE Threads::Threads ${Boost_LIBRARIES})
+ADD_EXECUTABLE(Client Client/Client.cpp Client/ServerFeedBack.h Client/ServerFeedBack.cpp Common/Common.hpp Common/json.hpp
+    Client/mainwindow.h Client/mainwindow.cpp Client/mainwindow.ui
+    Client/LogIn.h Client/LogIn.cpp Client/LogIn.ui
+    Client/RequestDialog.h Client/RequestDialog.cpp Client/RequestDialog.ui
+    Client/RequestsFilterModel.h Client/RequestsFilterModel.cpp)
+TARGET_LINK_LIBRARIES(Client PRIVATE Threads::Threads ${Boost_LIBRARIES} PRIVATE Qt6::Core PRIVATE Qt6::Gui PRIVATE Qt6::Widgets)
 target_include_directories(Client PRIVATE Client/ Common/)
-
-ADD_EXECUTABLE(TestServer TestServer/TestServer.cpp Server/Core.cpp Server/Core.h Common/json.hpp)
-target_link_libraries(TestServer  PRIVATE GTest::GTest  PRIVATE ${PostgreSQL_LIBRARIES})
-target_include_directories(TestServer PRIVATE Server/ Common/)

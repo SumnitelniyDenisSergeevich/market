@@ -15,6 +15,11 @@ public:
 
 public:
     void start();
+    void insertCompletedDeals(const DealData& deal);
+    void UpdateUsersBalance(const BalanceChanges& user_id_income);
+    void DeleteRequests(const std::vector<std::string>& delete_req);
+    void UpdateRequests(const std::map<std::string, int>& req_id_count);
+    void InsertRequest(const std::string& req);
 
 public:
     tcp::socket& Socket();
@@ -24,7 +29,7 @@ private:
     void handle_write(const boost::system::error_code& error);
     void handle_write_table(const std::vector<std::string>& data, const boost::system::error_code& error);
     void handle_read_table(const std::vector<std::string>& data, const boost::system::error_code& error, size_t bytes_transferred);
-    void handle_write_str(const boost::system::error_code& error);
+    void handle_write_empty(const boost::system::error_code& error);
 
 private:
     void SendTable(const std::vector<std::string>& data);
