@@ -2,7 +2,6 @@
 
 #include <QObject>
 #include <boost/asio.hpp>
-#include <QString>
 #include <map>
 
 using boost::asio::ip::tcp;
@@ -27,6 +26,7 @@ signals:
     void updateReq(std::map<std::string, int> req_id_count);
     void insertReq(const std::string& dump_request);
     void insertCompletedDeal(double price, int count, std::string seller, std::string buyer);
+    void updateUsdQuote(double quote);
 
 private:
     tcp::socket m_feedbackSocket;

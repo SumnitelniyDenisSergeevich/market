@@ -26,7 +26,7 @@ public:
 public:
     std::pair<std::string, std::string> GetUserbalance(const std::string& aUserId);
     std::vector<std::string> GetActiveRequests();
-    std::string LastAddedRequest();
+    std::string LastAddedRequest(std::string user_id);
     std::vector<std::string>  GetCompletedDeals(const std::string& aUserId);
     std::string GetUSDQuotes();
     std::string GetNameById(std::string user_id);

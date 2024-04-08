@@ -1,10 +1,9 @@
-#ifndef REQUESTDIALOG_H
-#define REQUESTDIALOG_H
+#pragma once
 
 #include <QDialog>
 
 namespace Ui {
-class RequestDialog;
+    class RequestDialog;
 }
 
 class RequestDialog : public QDialog
@@ -22,4 +21,3 @@ private:
     Ui::RequestDialog *ui;
 };
 
-#endif // REQUESTDIALOG_H

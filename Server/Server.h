@@ -24,6 +24,7 @@ public:
     void DeleteRequests(const std::vector<std::string>& delete_req);
     void UpdateRequests(const std::map<std::string, int>& req_id_count);
     void InsertRequest(const std::string& req);
+    void UpdateUsdQuotes(const std::string& quote);
 
 private:
     Session* FindFeedbackSession(int user_id);

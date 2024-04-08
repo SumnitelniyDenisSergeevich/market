@@ -404,7 +404,7 @@ std::vector<std::string> Core::GetActiveRequests()
     return requests;
 }
 
-std::string Core::LastAddedRequest()
+std::string Core::LastAddedRequest(std::string user_id)
 {
     std::string query_str = "SELECT "
                             "    REQ.id, "
@@ -417,8 +417,10 @@ std::string Core::LastAddedRequest()
                             "    END "
                             "FROM public.request_purchase_sale AS REQ "
                             "    JOIN public.users_log_pus AS USR ON REQ.user_id = USR.id "
+                            "WHERE "
+                            "   USR.id = " + user_id + " "
                             "ORDER BY "
-                            "    REQ.request_date "
+                            "    REQ.request_date DESC "
                             "LIMIT 1;";
     db_mutex_.lock_shared();
     PGresult* res = ExecuteDBQueryResponse(query_str);

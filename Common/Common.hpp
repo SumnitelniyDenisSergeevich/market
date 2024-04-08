@@ -20,12 +20,11 @@ namespace Requests
     static std::string LogOut                = "LogOut";
     static std::string CancelReq             = "CancelReq";
     static std::string RecivedRowsCount      = "RecivedRowsCount";
-
     static std::string UpdateActiveReq       = "UpdateActiveReq";
     static std::string DeleteActiveReq       = "DeleteActiveReq";
     static std::string InsertActiveReq       = "InsertActiveReq";
     static std::string UdpadeBalance         = "UdpadeBalance";
-    static std::string UdpadeUsdQuote        = "UdpadeUsdQuote";
+    static std::string UpdateUsdQuote        = "UpdateUsdQuote";
     static std::string InsertCompletedDeals  = "InsertCompletedDeals";
 }
 

@@ -1,7 +1,5 @@
 #include "RequestsFilterModel.h"
 
-#include <QDebug>
-
 RequestsFilterModel::RequestsFilterModel(QObject *parent)
     : QSortFilterProxyModel(parent)
 {}

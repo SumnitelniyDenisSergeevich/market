@@ -6,26 +6,20 @@
 #include "Common.hpp"
 #include "json.hpp"
 
-//#include "ServerFeedBack.h"
-
-#include <boost/asio.hpp>
-//#include <boost/thread.hpp>
+#include <boost/thread.hpp>
 
 using boost::asio::ip::tcp;
 
-MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
+MainWindow::MainWindow(boost::asio::io_service& io_service, tcp::resolver::iterator iterator, QWidget *parent) :
     QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , m_socket(io_service)
     , m_ioService(io_service)
+    , m_socket(m_ioService)
+    , m_feedback(m_ioService)
     , m_myId("0")
-    , m_feedback(io_service)
 {
     ui->setupUi(this);
 
-    tcp::resolver resolver(io_service);
-    tcp::resolver::query query(tcp::v4(), "127.0.0.1", std::to_string(port));
-    tcp::resolver::iterator iterator = resolver.resolve(query);
     m_socket.connect(*iterator);
 
     m_requestsModel.setHorizontalHeaderLabels({ "req_id", "user_login", "user_id", "d_price", "d_count", "side" });
@@ -59,7 +53,11 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
     {
         ui->RubSpibBox->setValue(ui->RubSpibBox->value() + income);
         ui->UsdSpinBox->setValue(ui->UsdSpinBox->value() + count);
-        qDebug() << "UPDATE BALANCE";
+    });
+
+    connect(&m_feedback, &ServerFeedback::updateUsdQuote, this, [this](double quote)
+    {
+        ui->usdQuotSpinBOx->setValue(quote);
     });
 
     connect(&m_feedback, &ServerFeedback::deleteReq, this, [this](std::vector<std::string> delete_req)
@@ -69,7 +67,6 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
             QList<QStandardItem*> removeItem = m_requestsModel.findItems(QString::fromStdString(req));
             m_requestsModel.removeRow(removeItem.first()->index().row());
         }
-        qDebug() << "DELETE REQ";
     });
 
     connect(&m_feedback, &ServerFeedback::updateReq, this, [this](std::map<std::string, int> req_id_count)
@@ -79,7 +76,6 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
             QList<QStandardItem*> updateItem = m_requestsModel.findItems(QString::fromStdString(req_id));
             m_requestsModel.item(updateItem.first()->index().row(), 4)->setData(count);
         }
-        qDebug() << "UPDATE REQ";
     });
 
     connect(&m_feedback, &ServerFeedback::insertReq, this, [this](std::string dump_request)
@@ -93,7 +89,6 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
             row.append(item);
         }
         m_requestsModel.appendRow(row);
-        qDebug() << "INSERT REQ";
     });
 
     connect(&m_feedback, &ServerFeedback::insertCompletedDeal, this, [this](double price, int count, std::string seller, std::string buyer)
@@ -111,8 +106,6 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
         row.append(item);
 
         m_completedDeals.appendRow(row);
-
-        qDebug() << "INSERT COMPLETED DEALS";
     });
 
     connect(&m_login, &LogIn::logButtonClicked, this, [this](const QString& login, const QString& password)
@@ -125,11 +118,9 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
             m_feedback.Start();
             boost::thread ClientThread(boost::bind(&boost::asio::io_service::run, &m_ioService));
 
-            qDebug() << "REG";
-
             SendMessage(Requests::Balance, "");
             auto j = nlohmann::json::parse(ReadMessage().toStdString());
-            ui->RubSpibBox->setValue(QString::fromLatin1(j["RUB"]).toDouble());
+            ui->RubSpibBox->setValue(QString::fromStdString(std::string{j["RUB"]}).toDouble());
             ui->UsdSpinBox->setValue(std::stoi(std::string{j["USD"]}));
 
             SendMessage(Requests::USDQuotes, "");
@@ -172,7 +163,7 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
 
     connect(&m_requestDialog, &RequestDialog::addRequestButtonClicked, this, [this](int usdCount, double usdPrice, bool forSale)
     {
-        SendRequestMessage(usdCount, usdPrice, forSale);
+        SendRequestMessage(forSale, usdCount, usdPrice);
         QMessageBox msgBox;
         msgBox.setText(ReadMessage());
         msgBox.exec();
@@ -243,7 +234,7 @@ void MainWindow::SendRequestMessage(const bool forSale,
     req["UserId"] = m_myId.toStdString();
     req["ReqType"] = forSale ? Requests::AddRequestSale : Requests::AddRequestPurchase;
     req["Count"] = std::to_string(dollarsCount);
-    req["Price"] = std::to_string(dollarPrice);
+    req["Price"] = std::to_string(dollarPrice);    
 
     std::string request = req.dump();
     boost::asio::write(m_socket, boost::asio::buffer(request, request.size()));
@@ -261,12 +252,16 @@ void MainWindow::ProcessLogIn(const QString& login, const QString& password)
 {
     SendLogMessage(QString::fromStdString(Requests::LogIn), login, password);
     m_myId = ReadMessage();
+    if (m_myId != "0")
+        setWindowTitle(login);
 }
 
 void MainWindow::ProcessRegistration(const QString& login, const QString& password)
 {
     SendLogMessage(QString::fromStdString(Requests::Registration), login, password);
     m_myId = ReadMessage();
+    if (m_myId != "0")
+        setWindowTitle(login);
 }
 
 QString MainWindow::ProcessCancelRequest(const QString& reqId)
@@ -318,47 +313,3 @@ void MainWindow::PrintTable(QStandardItemModel* m,const QString& rows_count_str)
         }        
     }
 }
-
-//void PrintReqTables(const QString& rows_count_str)
-//{
-//    int rows_count = rows_count_str.toInt();
-
-//    if (rows_count)
-//    {
-//        SendRequestMessage(Requests::RecivedRowsCount);
-//        int i = 0;
-//        QString str = "";
-
-//        while (i != rows_count)
-//        {
-//            str += ReadMessage();
-
-//            size_t s_pos = str.indexOf('{');
-//            size_t e_pos = str.indexOf('}');
-
-//            while (s_pos != -1 && e_pos != -1)
-//            {
-//                ++i;
-//                QStringView line = QStringView{str}.mid(s_pos, e_pos - s_pos + 1);
-
-//                nlohmann::json d = nlohmann::json::parse(line.toString().toStdString());
-
-//                QList<QStandardItem*> row;
-//                for (int i = 0; i < m->columnCount(); ++i)
-//                {
-//                    QString column = m->horizontalHeaderItem(i)->text();
-//                    QStandardItem* item = new QStandardItem(QString::fromStdString(d[column.toStdString()].template get<std::string>()));
-//                    row.append(item);
-//                }
-//                m->appendRow(row);
-
-//                s_pos = str.indexOf('{', e_pos);
-//                e_pos = str.indexOf('}', s_pos);
-//            }
-//            if (s_pos == -1)
-//                str = "";
-//            else if (i != rows_count)
-//                str = str.mid(s_pos);
-//        }
-//    }
-//}

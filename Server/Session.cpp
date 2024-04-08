@@ -36,13 +36,9 @@ void Session::insertCompletedDeals(const DealData& deal)
     req["Count"] = deal.count;
     req["Saller"] = core_.GetNameById(std::to_string(deal.seller_id));
     req["Buyer"] = core_.GetNameById(std::to_string(deal.buyer_id));
-
     std::string request = req.dump();
 
-    boost::asio::async_write(socket_,
-                             boost::asio::buffer(request.c_str(), request.size()),
-                             boost::bind(&Session::handle_write_empty, this, boost::asio::placeholders::error));//Должен получить сообщение о получении, и только после этого отправлять новый запрос на обновление
-                                                                                                                //Добавить мьютексы
+    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
 }
 
 void Session::UpdateUsersBalance(const BalanceChanges& balance)
@@ -53,23 +49,27 @@ void Session::UpdateUsersBalance(const BalanceChanges& balance)
     req["ChangedCount"] = balance.count;
     std::string request = req.dump();
 
-    boost::asio::async_write(socket_,
-                             boost::asio::buffer(request.c_str(), request.size()),
-                             boost::bind(&Session::handle_write_empty, this, boost::asio::placeholders::error));//Должен получить сообщение о получении, и только после этого отправлять новый запрос на обновление
-        //Добавить мьютексы
+    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
+}
+
+void Session::UpdateUsdQuote(const std::string quote)
+{
+    nlohmann::json req;
+    req["ReqType"] = Requests::UpdateUsdQuote;
+    req["UsdQuote"] = quote;
+    std::string request = req.dump();
+
+    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
 }
 
 void Session::DeleteRequests(const std::vector<std::string>& delete_req)
 {
-    std::cout << "DELETE REQUESTS" << std::endl;
     nlohmann::json req;
     req["ReqType"] = Requests::DeleteActiveReq;
     req["DeletedReq"] = delete_req;
     std::string request = req.dump();
 
-    boost::asio::async_write(socket_,
-                             boost::asio::buffer(request.c_str(), request.size()),
-                             boost::bind(&Session::handle_write_empty, this, boost::asio::placeholders::error));//Должен получить сообщение о получении, и только после этого отправлять новый запрос на обновление
+    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
 }
 
 void Session::UpdateRequests(const std::map<std::string, int>& req_id_count)
@@ -79,9 +79,7 @@ void Session::UpdateRequests(const std::map<std::string, int>& req_id_count)
     req["UpdatedReq"] = req_id_count;
     std::string request = req.dump();
 
-    boost::asio::async_write(socket_,
-                             boost::asio::buffer(request.c_str(), request.size()),
-                             boost::bind(&Session::handle_write_empty, this, boost::asio::placeholders::error));//Должен получить сообщение о получении, и только после этого отправлять новый запрос на обновление
+    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
 }
 
 void Session::InsertRequest(const std::string& dump_request)
@@ -91,9 +89,7 @@ void Session::InsertRequest(const std::string& dump_request)
     req["Req"] = dump_request;
     std::string request = req.dump();
 
-    boost::asio::async_write(socket_,
-                             boost::asio::buffer(request.c_str(), request.size()),
-                             boost::bind(&Session::handle_write_empty, this, boost::asio::placeholders::error));//Должен получить сообщение о получении, и только после этого отправлять новый запрос на обновление
+    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
 }
 
 void Session::SendTable(const std::vector<std::string>& data)
@@ -191,7 +187,10 @@ void Session::handle_read(const boost::system::error_code& error,
         {
             reply = core_.CancelRequest(j["UserId"], j["Message"]);
             if (reply == "Request canceled")
+            {
                 server_->DeleteRequests(std::vector<std::string>{j["Message"]});
+                server_->UpdateUsdQuotes(core_.GetUSDQuotes());
+            }
         }
         else if (reqType == Requests::USDQuotes)
         {
@@ -232,16 +231,15 @@ void Session::handle_read(const boost::system::error_code& error,
         if (reqType == Requests::Registration || reqType == Requests::LogIn)
             user_id_ = std::stoi(reply);
 
-        if (reqType == Requests::AddRequestSale || reqType == Requests::AddRequestPurchase)
+        if (reply == "Request has been created" && (reqType == Requests::AddRequestSale || reqType == Requests::AddRequestPurchase))
         {
-            if (reply == "Request has been created")
-                server_->InsertRequest(core_.LastAddedRequest());
-
+            server_->InsertRequest(core_.LastAddedRequest(std::to_string(user_id_)));
             ChangesData data = core_.ExecuteRequests();
             server_->insertCompletedDeals(data.deals);
             server_->UpdateUsersBalance(data.user_id_income);
             server_->DeleteRequests(data.delete_req);
             server_->UpdateRequests(data.req_id_count);
+            server_->UpdateUsdQuotes(core_.GetUSDQuotes());
         }
 
 

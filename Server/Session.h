@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <boost/asio.hpp>
 
 #include "Core.h"
@@ -20,6 +21,7 @@ public:
     void DeleteRequests(const std::vector<std::string>& delete_req);
     void UpdateRequests(const std::map<std::string, int>& req_id_count);
     void InsertRequest(const std::string& req);
+    void UpdateUsdQuote(const std::string quote);
 
 public:
     tcp::socket& Socket();

@@ -3,13 +3,12 @@
 #include <QMainWindow>
 #include <QStandardItemModel>
 
+#include <boost/asio.hpp>
+
 #include "RequestsFilterModel.h"
 #include "LogIn.h"
 #include "RequestDialog.h"
 #include "ServerFeedBack.h"
-
-#include <boost/asio.hpp>
-#include <boost/thread.hpp>
 
 namespace Ui {
     class MainWindow;
@@ -20,7 +19,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(boost::asio::io_service &io_service, QWidget *parent = nullptr);
+    explicit MainWindow(boost::asio::io_service &io_service, boost::asio::ip::tcp::resolver::iterator iterator, QWidget *parent = nullptr);
     ~MainWindow();
 
 public:
@@ -50,13 +49,15 @@ private:
     Ui::MainWindow *ui;
     LogIn m_login;
     RequestDialog m_requestDialog;
-    boost::asio::ip::tcp::socket m_socket;
+
     boost::asio::io_service &m_ioService;
-    QString m_myId;
+    boost::asio::ip::tcp::socket m_socket;
     ServerFeedback m_feedback;
 
     QStandardItemModel m_requestsModel;
     QStandardItemModel m_completedDeals;
 
     RequestsFilterModel m_userReqFilterModel;
+
+    QString m_myId;
 };

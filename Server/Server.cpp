@@ -72,12 +72,16 @@ void Server::UpdateUsersBalance(const std::map<int, BalanceChanges>& user_id_inc
     }
 }
 
+void Server::UpdateUsdQuotes(const std::string& quote)
+{
+    for(const auto [user_id, session] : id_session_)
+        session->UpdateUsdQuote(quote);
+}
+
 void Server::DeleteRequests(const std::vector<std::string>& delete_req)
 {
     for(const auto [user_id, session] : id_session_)
         session->DeleteRequests(delete_req);
-
-    std::cout << "UESER " << id_session_.size() << std::endl;
 }
 
 void Server::UpdateRequests(const std::map<std::string, int>& req_id_count)
