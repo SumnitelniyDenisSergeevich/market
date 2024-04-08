@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 
 #include <QMessageBox>
+#include <QDebug>
 
 #include "Common.hpp"
 #include "json.hpp"
@@ -13,7 +14,7 @@
 
 using boost::asio::ip::tcp;
 
-MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
+MainWindow::MainWindow(boost::asio::io_service& io_service, boost::asio::ip::tcp::resolver::iterator iterator, QWidget *parent) :
     QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , m_socket(io_service)
@@ -22,9 +23,6 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
 {
     ui->setupUi(this);
 
-    tcp::resolver resolver(io_service);
-    tcp::resolver::query query(tcp::v4(), "127.0.0.1", std::to_string(port));
-    tcp::resolver::iterator iterator = resolver.resolve(query);
     m_socket.connect(*iterator);
 
     m_requestsModel.setHorizontalHeaderLabels({ "req_id", "user_login", "user_id", "d_price", "d_count", "side" });
@@ -52,9 +50,7 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
     ui->MyRequestsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->CompletedDealsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-    m_feedback.Socket().connect(*iterator);
-
-    boost::thread ClientThread(boost::bind(&boost::asio::io_service::run, &io_service));
+    m_feedback.Socket().connect(*iterator);    
 
     connect(&m_feedback, &ServerFeedback::updateBalace, this, [this](double income, int count)
     {
@@ -122,14 +118,12 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, QWidget *parent) :
         if (m_myId != "0")
         {
             m_login.close();
-            m_feedback.Start();
             m_feedback.regFeedbackSocket(m_myId);
-
-            qDebug() << "REG";
+//            m_feedback.Start();
 
             SendMessage(Requests::Balance, "");
             auto j = nlohmann::json::parse(ReadMessage().toStdString());
-            ui->RubSpibBox->setValue(QString::fromLatin1(j["RUB"]).toDouble());
+            ui->RubSpibBox->setValue(QString::fromStdString(std::string{j["RUB"]}).toDouble());
             ui->UsdSpinBox->setValue(std::stoi(std::string{j["USD"]}));
 
             SendMessage(Requests::USDQuotes, "");

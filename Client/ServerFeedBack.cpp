@@ -7,12 +7,14 @@
 #include <iostream>
 #include <boost/bind/bind.hpp>
 
-ServerFeedback::ServerFeedback(boost::asio::io_service& io)
-    : m_feedbackSocket(io)
+ServerFeedback::ServerFeedback(boost::asio::io_service& io, QObject *parent)
+    : QObject(parent)
+    , m_feedbackSocket(io)
 {    }
 
 void ServerFeedback::Start()
 {
+    qDebug() << "Start Listening ";
     m_feedbackSocket.async_read_some(boost::asio::buffer(data_, max_length),
         boost::bind(&ServerFeedback::handle_read, this,
             boost::asio::placeholders::error,
@@ -27,6 +29,9 @@ tcp::socket& ServerFeedback::Socket()
 void ServerFeedback::handle_read(const boost::system::error_code& error,
                  size_t bytes_transferred)
 {
+
+    qDebug() << "I AM HERE: " << data_;
+
     if (!error)
     {
         data_[bytes_transferred] = '\0';
@@ -55,12 +60,16 @@ void ServerFeedback::handle_read(const boost::system::error_code& error,
         else
             reply = "NotReadData";
 
-        qDebug() << QString::fromStdString(std::string{reqType});
+        qDebug() << "WATAFAK: " << data_;
 
         boost::asio::async_write(m_feedbackSocket,
                                  boost::asio::buffer(reply.c_str(), reply.size()),
                                  boost::bind(&ServerFeedback::handle_write, this,
                                              boost::asio::placeholders::error));
+    }
+    else
+    {
+        qDebug() << "ERROR";
     }
 }
 
@@ -86,5 +95,9 @@ void ServerFeedback::regFeedbackSocket(const QString& userId)
     req["ReqType"] = Requests::SFeedBackReg;
 
     std::string request = req.dump();
-    boost::asio::write(m_feedbackSocket, boost::asio::buffer(request, request.size()));
+//    boost::asio::write(m_feedbackSocket, boost::asio::buffer(request, request.size()));
+
+    boost::asio::async_write(m_feedbackSocket,
+                             boost::asio::buffer(request.c_str(), request.size()),
+                             boost::bind(&ServerFeedback::handle_write, this, boost::asio::placeholders::error));
 }

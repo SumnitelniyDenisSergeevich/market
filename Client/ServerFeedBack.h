@@ -11,7 +11,7 @@ class ServerFeedback : public QObject
 {
     Q_OBJECT
 public:
-    ServerFeedback(boost::asio::io_service& io);
+    ServerFeedback(boost::asio::io_service& io, QObject* parent = nullptr);
 
     void Start();
     tcp::socket& Socket();
