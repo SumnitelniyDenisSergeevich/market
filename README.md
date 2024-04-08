@@ -1,5 +1,6 @@
 # market
 client-server app with postgre and boost 
+(РЕАЛИЗАЦИЯ С QT В ОТДЕЛЬНОЙ ВЕТКЕ)
 # Необходимые библиотеки
   Для сборки проекта потребуются следующие библиотеки:
   1. Boost (для установки необходимо ввести команду `apt install libboost-all-dev libboost-thread-dev`).
