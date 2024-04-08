@@ -1,5 +1,5 @@
 # market
-client-server app with postgre and boost 
+client-server app with postgre and boost  
 (РЕАЛИЗАЦИЯ С QT В ОТДЕЛЬНОЙ ВЕТКЕ)
 # Необходимые библиотеки
   Для сборки проекта потребуются следующие библиотеки:
