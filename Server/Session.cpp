@@ -61,7 +61,7 @@ void Session::UpdateUsersBalance(const BalanceChanges& balance)
 
 void Session::DeleteRequests(const std::vector<std::string>& delete_req)
 {
-    std::cout << "DELETE REQUESTS: " << *delete_req.begin() << " " << user_id_ << std::endl;
+    std::cout << "DELETE REQUESTS" << std::endl;
     nlohmann::json req;
     req["ReqType"] = Requests::DeleteActiveReq;
     req["DeletedReq"] = delete_req;
@@ -159,7 +159,6 @@ void Session::handle_read_table(const std::vector<std::string>& data, const boos
 
 void Session::handle_write_empty(const boost::system::error_code& error)
 {
-    std::cout << "WRITE EMPTY" << std::endl;
     if (error)
         delete this;
 }
@@ -201,9 +200,7 @@ void Session::handle_read(const boost::system::error_code& error,
         }
         else if (reqType == Requests::SFeedBackReg)
         {
-            std::cout << "\nREG: " << user_id_ << std::endl;
             user_id_ = std::stoi(std::string{j["UserId"]});
-            std::cout << "\nREG: " << user_id_ << std::endl;
             server_->RegFeedbackSession(user_id_, this);
         }
         else if (reqType == Requests::ActiveRequests)

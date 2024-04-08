@@ -20,7 +20,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(boost::asio::io_service &io_service, boost::asio::ip::tcp::resolver::iterator iterator, QWidget *parent = nullptr);
+    explicit MainWindow(boost::asio::io_service &io_service, QWidget *parent = nullptr);
     ~MainWindow();
 
 public:
@@ -51,6 +51,7 @@ private:
     LogIn m_login;
     RequestDialog m_requestDialog;
     boost::asio::ip::tcp::socket m_socket;
+    boost::asio::io_service &m_ioService;
     QString m_myId;
     ServerFeedback m_feedback;
 

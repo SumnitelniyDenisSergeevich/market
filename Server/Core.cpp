@@ -551,12 +551,12 @@ std::string Core::CancelRequest(const std::string& aUserId, const std::string re
 
     if (resStatus == PGRES_COMMAND_OK && std::stoi(deleted_rows_count) == 1)
     {
-        std::cout << "UserId: " << aUserId << " canceled request" << req_id << std::endl;
+        std::cout << "UserId: " << aUserId << " canceled request " << req_id << std::endl;
         result = "Request canceled";
     }
     else
     {
-        std::cout << "UserId: " << aUserId << " not canceled request" << req_id << std::endl;
+        std::cout << "UserId: " << aUserId << " not canceled request " << req_id << std::endl;
         result = "Request not canceled";
     }
 
@@ -565,7 +565,7 @@ std::string Core::CancelRequest(const std::string& aUserId, const std::string re
     return result;
 }
 
-void Core::LogOut(const std::string& aUserId)//В Qt Gui можно поставить на закрытие приложения
+void Core::LogOut(const std::string& aUserId)
 {
     std::string query_str = "UPDATE public.users_log_pus "
                             "SET online=false "

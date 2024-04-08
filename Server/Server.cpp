@@ -77,7 +77,7 @@ void Server::DeleteRequests(const std::vector<std::string>& delete_req)
     for(const auto [user_id, session] : id_session_)
         session->DeleteRequests(delete_req);
 
-    std::cout << "UESER " << id_session_.size() << id_session_.begin()->first << std::endl;
+    std::cout << "UESER " << id_session_.size() << std::endl;
 }
 
 void Server::UpdateRequests(const std::map<std::string, int>& req_id_count)
