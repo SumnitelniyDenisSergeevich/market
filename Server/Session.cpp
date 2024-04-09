@@ -1,6 +1,5 @@
 #include <boost/bind/bind.hpp>
 #include <iostream>
-#include <string>
 
 #include "Server.h"
 #include "Session.h"
@@ -28,6 +27,19 @@ void Session::start()
             boost::asio::placeholders::bytes_transferred));
 }
 
+void Session::ReadMessage()
+{
+    boost::asio::streambuf b;
+    boost::asio::read_until(socket_, b, "\0");
+    std::istream is(&b);
+    std::string line(std::istreambuf_iterator<char>(is), {});
+
+    if (line == "ReadData")
+        std::cout << "Client read data" << std::endl;
+    else
+        std::cout << "Client NOT read data" << std::endl;
+}
+
 void Session::insertCompletedDeals(const DealData& deal)
 {
     nlohmann::json req;
@@ -39,6 +51,7 @@ void Session::insertCompletedDeals(const DealData& deal)
     std::string request = req.dump();
 
     boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
+    ReadMessage();
 }
 
 void Session::UpdateUsersBalance(const BalanceChanges& balance)
@@ -50,6 +63,7 @@ void Session::UpdateUsersBalance(const BalanceChanges& balance)
     std::string request = req.dump();
 
     boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
+    ReadMessage();
 }
 
 void Session::UpdateUsdQuote(const std::string quote)
@@ -60,6 +74,7 @@ void Session::UpdateUsdQuote(const std::string quote)
     std::string request = req.dump();
 
     boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
+    ReadMessage();
 }
 
 void Session::DeleteRequests(const std::vector<std::string>& delete_req)
@@ -70,6 +85,7 @@ void Session::DeleteRequests(const std::vector<std::string>& delete_req)
     std::string request = req.dump();
 
     boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
+    ReadMessage();
 }
 
 void Session::UpdateRequests(const std::map<std::string, int>& req_id_count)
@@ -80,6 +96,7 @@ void Session::UpdateRequests(const std::map<std::string, int>& req_id_count)
     std::string request = req.dump();
 
     boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
+    ReadMessage();
 }
 
 void Session::InsertRequest(const std::string& dump_request)
@@ -90,6 +107,7 @@ void Session::InsertRequest(const std::string& dump_request)
     std::string request = req.dump();
 
     boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
+    ReadMessage();
 }
 
 void Session::SendTable(const std::vector<std::string>& data)
@@ -241,7 +259,6 @@ void Session::handle_read(const boost::system::error_code& error,
             server_->UpdateRequests(data.req_id_count);
             server_->UpdateUsdQuotes(core_.GetUSDQuotes());
         }
-
 
         if (reqType != Requests::SFeedBackReg && reqType != Requests::ActiveRequests
                 && reqType != Requests::CompletedTransactions)

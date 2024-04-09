@@ -10,6 +10,8 @@
 #include "RequestDialog.h"
 #include "ServerFeedBack.h"
 
+#include <string>
+
 namespace Ui {
     class MainWindow;
 }

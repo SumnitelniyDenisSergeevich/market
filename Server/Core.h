@@ -34,8 +34,8 @@ public:
 public://mutable
     std::string RegisterNewUser(const std::string& login, const std::string& password);
     std::string LogIn(const std::string& login, const std::string& password);
-    std::string AddRequestSale(const std::string& aUserId, const std::string& count, const std::string& price);
-    std::string AddRequestPurchase(const std::string& aUserId, const std::string& count, const std::string& price);
+    std::string AddRequestSale(const std::string& aUserId, const int count, const double price);
+    std::string AddRequestPurchase(const std::string& aUserId, const int count, const double price);
     ChangesData ExecuteRequests();
     std::string CancelRequest(const std::string& aUserId, const std::string req_id);
     void LogOut(const std::string& aUserId);

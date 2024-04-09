@@ -27,6 +27,7 @@ public:
     tcp::socket& Socket();
 
 private:
+    void ReadMessage();
     void handle_read(const boost::system::error_code& error, size_t bytes_transferred);
     void handle_write(const boost::system::error_code& error);
     void handle_write_table(const std::vector<std::string>& data, const boost::system::error_code& error);

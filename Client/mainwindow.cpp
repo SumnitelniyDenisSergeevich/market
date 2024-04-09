@@ -3,6 +3,8 @@
 
 #include <QMessageBox>
 
+#include <QDebug>
+
 #include "Common.hpp"
 #include "json.hpp"
 
@@ -72,9 +74,10 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, tcp::resolver::itera
     connect(&m_feedback, &ServerFeedback::updateReq, this, [this](std::map<std::string, int> req_id_count)
     {
         for(const auto& [req_id, count] : req_id_count)
-        {
+        {            
             QList<QStandardItem*> updateItem = m_requestsModel.findItems(QString::fromStdString(req_id));
-            m_requestsModel.item(updateItem.first()->index().row(), 4)->setData(count);
+            if (updateItem.size())
+                m_requestsModel.setData(m_requestsModel.index(updateItem.first()->row(), 4), count);
         }
     });
 
@@ -233,10 +236,11 @@ void MainWindow::SendRequestMessage(const bool forSale,
     nlohmann::json req;
     req["UserId"] = m_myId.toStdString();
     req["ReqType"] = forSale ? Requests::AddRequestSale : Requests::AddRequestPurchase;
-    req["Count"] = std::to_string(dollarsCount);
-    req["Price"] = std::to_string(dollarPrice);    
+    req["Count"] = dollarsCount;
+    req["Price"] = dollarPrice;
 
     std::string request = req.dump();
+
     boost::asio::write(m_socket, boost::asio::buffer(request, request.size()));
 }
 

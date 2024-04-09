@@ -119,10 +119,10 @@ std::pair<std::string, std::string> Core::GetUserbalance(const std::string& aUse
     return result;
 }
 
-std::string Core::AddRequestSale(const std::string& aUserId, const std::string& count, const std::string& price)
+std::string Core::AddRequestSale(const std::string& aUserId, const int count, const double price)
 {
     std::string result = "Failed to create a request";
-    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count, sale) VALUES(" + aUserId + ", " + price + " , " + count + ", true ); ";
+    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count, sale) VALUES(" + aUserId + ", " + std::to_string(price) + " , " + std::to_string(count) + ", true ); ";
 
     if (AddRequest(query_str))
         result = "Request has been created";
@@ -130,11 +130,11 @@ std::string Core::AddRequestSale(const std::string& aUserId, const std::string& 
     return result;
 }
 
-std::string Core::AddRequestPurchase(const std::string& aUserId, const std::string& count, const std::string& price)
+std::string Core::AddRequestPurchase(const std::string& aUserId, const int count, const double price)
 {
     std::string result = "Failed to create a request";
-    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count) VALUES(" + aUserId + ", " + price + " , " + count + " ); ";
-    
+    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count) VALUES(" + aUserId + ", " + std::to_string(price) + " , " + std::to_string(count) + " ); ";
+
     if (AddRequest(query_str))
         result = "Request has been created";
     
