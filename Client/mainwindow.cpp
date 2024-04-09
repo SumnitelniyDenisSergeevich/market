@@ -3,10 +3,9 @@
 
 #include <QMessageBox>
 
-#include <QDebug>
-
 #include "Common.hpp"
 #include "json.hpp"
+#include "Notify.h"
 
 #include <boost/thread.hpp>
 
@@ -97,7 +96,9 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, tcp::resolver::itera
     connect(&m_feedback, &ServerFeedback::insertCompletedDeal, this, [this](double price, int count, std::string seller, std::string buyer)
     {
         QList<QStandardItem*> row;
-        //NOTIFICATION
+
+        Notify::showMessage(QString::fromStdString(seller) + " sold " + QString::fromStdString(std::to_string(count)) + " usd  to" +
+                            QString::fromStdString(buyer) + " at a price of " + QString::fromStdString(std::to_string(price)) + " per piece", this);
 
         QStandardItem* item = new QStandardItem(QString::fromStdString(buyer));
         row.append(item);
@@ -139,7 +140,7 @@ MainWindow::MainWindow(boost::asio::io_service& io_service, tcp::resolver::itera
 
             ui->AllRequestsTable->resizeColumnsToContents();
             ui->MyRequestsTable->resizeColumnsToContents();
-            ui->CompletedDealsTable->resizeColumnsToContents();
+            ui->CompletedDealsTable->resizeColumnsToContents();            
 
             showMaximized();
         }

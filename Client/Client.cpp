@@ -3,8 +3,6 @@
 #include <QApplication>
 #include <boost/asio.hpp>
 
-#include <exception>
-
 #include "Common.hpp"
 
 int main(int argc, char *argv[])
