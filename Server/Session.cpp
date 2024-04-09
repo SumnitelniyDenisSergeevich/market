@@ -1,5 +1,6 @@
 #include <boost/bind/bind.hpp>
 #include <iostream>
+#include <string>
 
 #include "Server.h"
 #include "Session.h"
@@ -25,89 +26,6 @@ void Session::start()
         boost::bind(&Session::handle_read, this,
             boost::asio::placeholders::error,
             boost::asio::placeholders::bytes_transferred));
-}
-
-void Session::ReadMessage()
-{
-    boost::asio::streambuf b;
-    boost::asio::read_until(socket_, b, "\0");
-    std::istream is(&b);
-    std::string line(std::istreambuf_iterator<char>(is), {});
-
-    if (line == "ReadData")
-        std::cout << "Client read data" << std::endl;
-    else
-        std::cout << "Client NOT read data" << std::endl;
-}
-
-void Session::insertCompletedDeals(const DealData& deal)
-{
-    nlohmann::json req;
-    req["ReqType"] = Requests::InsertCompletedDeals;
-    req["Price"] = deal.price;
-    req["Count"] = deal.count;
-    req["Saller"] = core_.GetNameById(std::to_string(deal.seller_id));
-    req["Buyer"] = core_.GetNameById(std::to_string(deal.buyer_id));
-    std::string request = req.dump();
-
-    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
-    ReadMessage();
-}
-
-void Session::UpdateUsersBalance(const BalanceChanges& balance)
-{
-    nlohmann::json req;
-    req["ReqType"] = Requests::UdpadeBalance;
-    req["ChangedIncome"] = balance.income;
-    req["ChangedCount"] = balance.count;
-    std::string request = req.dump();
-
-    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
-    ReadMessage();
-}
-
-void Session::UpdateUsdQuote(const std::string quote)
-{
-    nlohmann::json req;
-    req["ReqType"] = Requests::UpdateUsdQuote;
-    req["UsdQuote"] = quote;
-    std::string request = req.dump();
-
-    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
-    ReadMessage();
-}
-
-void Session::DeleteRequests(const std::vector<std::string>& delete_req)
-{
-    nlohmann::json req;
-    req["ReqType"] = Requests::DeleteActiveReq;
-    req["DeletedReq"] = delete_req;
-    std::string request = req.dump();
-
-    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
-    ReadMessage();
-}
-
-void Session::UpdateRequests(const std::map<std::string, int>& req_id_count)
-{
-    nlohmann::json req;
-    req["ReqType"] = Requests::UpdateActiveReq;
-    req["UpdatedReq"] = req_id_count;
-    std::string request = req.dump();
-
-    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
-    ReadMessage();
-}
-
-void Session::InsertRequest(const std::string& dump_request)
-{
-    nlohmann::json req;
-    req["ReqType"] = Requests::InsertActiveReq;
-    req["Req"] = dump_request;
-    std::string request = req.dump();
-
-    boost::asio::write(socket_, boost::asio::buffer(request, request.size()));
-    ReadMessage();
 }
 
 void Session::SendTable(const std::vector<std::string>& data)
@@ -145,20 +63,12 @@ void Session::handle_read_table(const std::vector<std::string>& data, const boos
 {
     if (!error)
     {
-
-        data_[bytes_transferred] = '\0';
-        auto j = nlohmann::json::parse(data_);
-        auto reqType = j["ReqType"];
-
-        if (reqType == Requests::RecivedRowsCount)
+        for (std::string req : data)
         {
-            for (const std::string& req : data)
-            {
-                boost::asio::async_write(socket_,
-                    boost::asio::buffer(req.c_str(), req.size()),
-                    boost::bind(&Session::handle_write_empty, this,
-                        boost::asio::placeholders::error));
-            }
+            boost::asio::async_write(socket_,
+                boost::asio::buffer(req.c_str(), req.size()),
+                boost::bind(&Session::handle_write_str, this,
+                    boost::asio::placeholders::error));
         }
         socket_.async_read_some(boost::asio::buffer(data_, max_length),
             boost::bind(&Session::handle_read, this,
@@ -171,7 +81,7 @@ void Session::handle_read_table(const std::vector<std::string>& data, const boos
     }
 }
 
-void Session::handle_write_empty(const boost::system::error_code& error)
+void Session::handle_write_str(const boost::system::error_code& error)
 {
     if (error)
         delete this;
@@ -202,28 +112,23 @@ void Session::handle_read(const boost::system::error_code& error,
             reply = core_.AddRequestPurchase(j["UserId"], j["Count"], j["Price"]);
         }
         else if (reqType == Requests::CancelReq)
-        {
             reply = core_.CancelRequest(j["UserId"], j["Message"]);
-            if (reply == "Request canceled")
-            {
-                server_->DeleteRequests(std::vector<std::string>{j["Message"]});
-                server_->UpdateUsdQuotes(core_.GetUSDQuotes());
-            }
-        }
         else if (reqType == Requests::USDQuotes)
         {
             std::cout << "UserId: " << user_id_ << " asked husd quotes" << std::endl;
             reply = core_.GetUSDQuotes();
         }
         else if (reqType == Requests::SFeedBackReg)
-        {
-            user_id_ = std::stoi(std::string{j["UserId"]});
             server_->RegFeedbackSession(user_id_, this);
-        }
         else if (reqType == Requests::ActiveRequests)
         {
             std::cout << "UserId: " << user_id_ << " asked active requests" << std::endl;
             SendTable(core_.GetActiveRequests());
+        }
+        else if (reqType == Requests::MyActiveRequests)
+        {
+            std::cout << "UserId: " << user_id_ << " asked his requests" << std::endl;
+            SendTable(core_.GetActiveUserRequests(j["UserId"]));
         }
         else if (reqType == Requests::CompletedTransactions)
         {
@@ -234,10 +139,7 @@ void Session::handle_read(const boost::system::error_code& error,
         {
             std::cout << "UserId: " << user_id_ << " asked balance" << std::endl;
             auto balance = core_.GetUserbalance(j["UserId"]);
-            nlohmann::json json_balance;
-            json_balance["RUB"] = balance.first;
-            json_balance["USD"] = balance.second;
-            reply = json_balance.dump();
+            reply = "Your balance is: " + balance.first + " RUB, " + balance.second + " USD";
         }        
         else if (reqType == Requests::LogOut)
         {
@@ -247,21 +149,13 @@ void Session::handle_read(const boost::system::error_code& error,
         }
 
         if (reqType == Requests::Registration || reqType == Requests::LogIn)
-            user_id_ = std::stoi(reply);
+            user_id_ = stoi(reply);
 
-        if (reply == "Request has been created" && (reqType == Requests::AddRequestSale || reqType == Requests::AddRequestPurchase))
-        {
-            server_->InsertRequest(core_.LastAddedRequest(std::to_string(user_id_)));
-            ChangesData data = core_.ExecuteRequests();
-            server_->insertCompletedDeals(data.deals);
-            server_->UpdateUsersBalance(data.user_id_income);
-            server_->DeleteRequests(data.delete_req);
-            server_->UpdateRequests(data.req_id_count);
-            server_->UpdateUsdQuotes(core_.GetUSDQuotes());
-        }
+        if (reqType == Requests::AddRequestSale || reqType == Requests::AddRequestPurchase)
+            server_->SendNotificationsAboutTransactions(core_.ExecuteRequests());
 
-        if (reqType != Requests::SFeedBackReg && reqType != Requests::ActiveRequests
-                && reqType != Requests::CompletedTransactions)
+        if (reqType != Requests::SFeedBackReg && reqType != Requests::ActiveRequests &&
+                reqType != Requests::MyActiveRequests && reqType != Requests::CompletedTransactions)
         {
             boost::asio::async_write(socket_,
                 boost::asio::buffer(reply.c_str(), reply.size()),
