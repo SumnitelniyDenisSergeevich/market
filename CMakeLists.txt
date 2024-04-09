@@ -1,17 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.16)
 PROJECT(ClienServerEcn)
 
-#set(BOOST_ROOT "e:/boost/boost_build_vc143")
-#set(Boost_INCLUDE_DIR "e:/boost/boost_build_vc143/include/boost-1_84")
-#set(Boost_LIBRARIES "e:/boost/boost_build_vc143/lib")
-
-#set(PostgreSQL_INCLUDE_DIRS "e:/Postgre_sql/include")#нужно подключить только libpq-fe.h
-#set(PostgreSQL_LIBRARIES "e:/Postgre_sql/lib/libpq.lib")
-
-
-#set(PostgreSQL_INCLUDE_DIR "e:/Postgre_sql/include")#нужно подключить только libpq-fe.h
-#set(PostgreSQL_LIBRARY "e:/Postgre_sql/lib/libpq.lib")
-
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
