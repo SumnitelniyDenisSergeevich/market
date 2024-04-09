@@ -4,6 +4,7 @@
 
 #include "Server.h"
 #include "Session.h"
+#include "json.hpp"
 
 Server::Server(boost::asio::io_service& io_service)
     : io_service_(io_service),
@@ -46,29 +47,53 @@ Session* Server::FindFeedbackSession(int user_id)
     return iter != id_session_.end() ? iter->second : nullptr;
 }
 
-void Server::SendNotificationsAboutTransactions(std::vector<DealData> deals)
+void Server::insertCompletedDeals(const std::vector<DealData>& deals)
 {
     for (const DealData& deal : deals)
     {
-        double amount = deal.count * deal.price;
         Session* buyer_session = FindFeedbackSession(deal.buyer_id);
         Session* seller_session = FindFeedbackSession(deal.seller_id);
 
         if (buyer_session)
-        {
-            std::string purchase_reply = "\nNotification: You bought " + std::to_string(deal.count) + " USD for " + std::to_string(amount) + " RUB;\n> ";
-            boost::asio::async_write(buyer_session->Socket(),
-                boost::asio::buffer(purchase_reply.c_str(), purchase_reply.size()),
-                boost::bind(&Server::handle_write, this, boost::asio::placeholders::error));
-        }
+            buyer_session->insertCompletedDeals(deal);
         if (seller_session)
-        {
-            std::string sale_reply = "\nNotification: You sold " + std::to_string(deal.count) + " USD for " + std::to_string(amount) + " RUB;\n> ";
-            boost::asio::async_write(seller_session->Socket(),
-                boost::asio::buffer(sale_reply.c_str(), sale_reply.size()),
-                boost::bind(&Server::handle_write, this, boost::asio::placeholders::error));
-        }
+            seller_session->insertCompletedDeals(deal);
     }
+}
+
+void Server::UpdateUsersBalance(const std::map<int, BalanceChanges>& user_id_income)\
+{
+    for (const auto [user_id, balance] : user_id_income)
+    {
+        Session* user_session = FindFeedbackSession(user_id);
+
+        if (user_session)
+            user_session->UpdateUsersBalance(balance);
+    }
+}
+
+void Server::UpdateUsdQuotes(const std::string& quote)
+{
+    for(const auto [user_id, session] : id_session_)
+        session->UpdateUsdQuote(quote);
+}
+
+void Server::DeleteRequests(const std::vector<std::string>& delete_req)
+{
+    for(const auto [user_id, session] : id_session_)
+        session->DeleteRequests(delete_req);
+}
+
+void Server::UpdateRequests(const std::map<std::string, int>& req_id_count)
+{
+    for(const auto [user_id, session] : id_session_)
+        session->UpdateRequests(req_id_count);
+}
+
+void Server::InsertRequest(const std::string& req)
+{
+    for(const auto [user_id, session] : id_session_)
+        session->InsertRequest(req);
 }
 
 void Server::handle_accept(Session* new_session,
@@ -88,5 +113,3 @@ void Server::handle_accept(Session* new_session,
         delete new_session;
     }
 }
-
-void Server::handle_write(const boost::system::error_code& error) {}

@@ -119,10 +119,10 @@ std::pair<std::string, std::string> Core::GetUserbalance(const std::string& aUse
     return result;
 }
 
-std::string Core::AddRequestSale(const std::string& aUserId, const std::string& count, const std::string& price)
+std::string Core::AddRequestSale(const std::string& aUserId, const int count, const double price)
 {
     std::string result = "Failed to create a request";
-    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count, sale) VALUES(" + aUserId + ", " + price + " , " + count + ", true ); ";
+    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count, sale) VALUES(" + aUserId + ", " + std::to_string(price) + " , " + std::to_string(count) + ", true ); ";
 
     if (AddRequest(query_str))
         result = "Request has been created";
@@ -130,11 +130,11 @@ std::string Core::AddRequestSale(const std::string& aUserId, const std::string& 
     return result;
 }
 
-std::string Core::AddRequestPurchase(const std::string& aUserId, const std::string& count, const std::string& price)
+std::string Core::AddRequestPurchase(const std::string& aUserId, const int count, const double price)
 {
     std::string result = "Failed to create a request";
-    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count) VALUES(" + aUserId + ", " + price + " , " + count + " ); ";
-    
+    std::string query_str = "INSERT INTO public.request_purchase_sale(user_id, dollar_price, dollars_count) VALUES(" + aUserId + ", " + std::to_string(price) + " , " + std::to_string(count) + " ); ";
+
     if (AddRequest(query_str))
         result = "Request has been created";
     
@@ -157,15 +157,13 @@ bool Core::AddRequest(const std::string& request)
     return result;
 }
 
-std::vector<DealData> Core::ExecuteRequests()
+ChangesData Core::ExecuteRequests()
 {
     std::vector<ReqData> purchase_req = DBExecuteRequests(false);
     std::vector<ReqData> sale_req = DBExecuteRequests(true);
 
     //Выполнение запросов
-    std::vector<DealData> deals;//для подсчета баланса и заполнения истории
-    std::vector<std::string> delete_req;//Закрытые запросы
-    std::map<std::string, int> req_id_count;//Потенциальные запросы на обновление
+    ChangesData data;
 
     for (auto pur_iter = purchase_req.begin(); pur_iter != purchase_req.end(); ++pur_iter)
         for (auto sale_iter = sale_req.begin(); sale_iter != sale_req.end(); ++sale_iter)
@@ -187,40 +185,40 @@ std::vector<DealData> Core::ExecuteRequests()
                 pur_iter->count = 0;
                 sale_iter->count = 0;
 
-                delete_req.push_back(pur_iter->req_id);
-                delete_req.push_back(sale_iter->req_id);
+                data.delete_req.push_back(pur_iter->req_id);
+                data.delete_req.push_back(sale_iter->req_id);
             }
             else if (pur_iter->count > sale_iter->count)
             {
                 deal.count = sale_iter->count;
                 pur_iter->count -= sale_iter->count;
                 sale_iter->count = 0;
-                delete_req.push_back(sale_iter->req_id);
-                req_id_count[pur_iter->req_id] = pur_iter->count;
+                data.delete_req.push_back(sale_iter->req_id);
+                data.req_id_count[pur_iter->req_id] = pur_iter->count;
             }
             else
             {
                 deal.count = pur_iter->count;
                 sale_iter->count -= pur_iter->count;
                 pur_iter->count = 0;
-                delete_req.push_back(pur_iter->req_id);
-                req_id_count[sale_iter->req_id] = sale_iter->count;
+                data.delete_req.push_back(pur_iter->req_id);
+                data.req_id_count[sale_iter->req_id] = sale_iter->count;
             }
-            deals.push_back(deal);
+            data.deals.push_back(deal);
         }
 
-    for (const std::string& id : delete_req)// Удаляю лишние заявки, которые не надо будет обновлять
+    for (const std::string& id : data.delete_req)// Удаляю лишние заявки, которые не надо будет обновлять
     {
-        auto iter = req_id_count.find(id);
-        if (iter != req_id_count.end())
-            req_id_count.erase(iter);
+        auto iter = data.req_id_count.find(id);
+        if (iter != data.req_id_count.end())
+            data.req_id_count.erase(iter);
     }
 
-    DeleteCompletedRequests(delete_req);
-    UpdateRequests(req_id_count);
-    UpdateBalance(deals);
+    DeleteCompletedRequests(data.delete_req);
+    UpdateRequests(data.req_id_count);
+    data.user_id_income = UpdateBalance(data.deals);
 
-    return deals;//Для отправки писем пользователям, о совершении сделки
+    return data;//Для отправки писем пользователям, о совершении сделки
 }
 
 void Core::ExecuteDBQuery(const std::string& query_str)
@@ -345,7 +343,7 @@ std::map<int, BalanceChanges> Core::UpdateTransactionHistory(const std::vector<D
     return user_id_income;
 }
 
-void Core::UpdateBalance(const std::vector<DealData>& deals)
+std::map<int, BalanceChanges> Core::UpdateBalance(const std::vector<DealData>& deals)
 {
     std::map<int, BalanceChanges> user_id_income = UpdateTransactionHistory(deals);
     for (const auto [id, balance_changes] : user_id_income)//Изменение баланса пользователей
@@ -361,6 +359,7 @@ void Core::UpdateBalance(const std::vector<DealData>& deals)
         ExecuteDBQuery(query_str);
         db_mutex_.unlock();
     }
+    return user_id_income;
 }
 
 std::vector<std::string> Core::GetActiveRequests()
@@ -368,6 +367,7 @@ std::vector<std::string> Core::GetActiveRequests()
     std::string query_str = "SELECT "
                             "    REQ.id, "
                             "    USR.login, "
+                            "    USR.id, "
                             "    REQ.dollar_price, "
                             "    REQ.dollars_count, "
                             "    CASE WHEN REQ.sale = true THEN 'sells' "
@@ -391,9 +391,10 @@ std::vector<std::string> Core::GetActiveRequests()
             nlohmann::json req;
             req["req_id"]     = std::string{ PQgetvalue(res, i, 0) };
             req["user_login"] = std::string{ PQgetvalue(res, i, 1) };
-            req["d_count"]    = std::string{ PQgetvalue(res, i, 3) };
-            req["d_price"]    = std::string{ PQgetvalue(res, i, 2) };
-            req["side"]       = std::string{ PQgetvalue(res, i, 4) };
+            req["user_id"]    = std::string{ PQgetvalue(res, i, 2) };
+            req["d_count"]    = std::string{ PQgetvalue(res, i, 4) };
+            req["d_price"]    = std::string{ PQgetvalue(res, i, 3) };
+            req["side"]       = std::string{ PQgetvalue(res, i, 5) };
 
             requests.push_back(req.dump());
         }
@@ -403,44 +404,50 @@ std::vector<std::string> Core::GetActiveRequests()
     return requests;
 }
 
-std::vector<std::string> Core::GetActiveUserRequests(const std::string& aUserId)
+std::string Core::LastAddedRequest(std::string user_id)
 {
     std::string query_str = "SELECT "
-                            "    id, "
-                            "    dollar_price, "
-                            "    dollars_count, "
-                            "    CASE WHEN sale = true THEN 'sell' "
-                            "         ELSE 'buy' "
+                            "    REQ.id, "
+                            "    USR.login, "
+                            "    USR.id, "
+                            "    REQ.dollar_price, "
+                            "    REQ.dollars_count, "
+                            "    CASE WHEN REQ.sale = true THEN 'sells' "
+                            "         ELSE 'buys' "
                             "    END "
-                            "FROM public.request_purchase_sale "
+                            "FROM public.request_purchase_sale AS REQ "
+                            "    JOIN public.users_log_pus AS USR ON REQ.user_id = USR.id "
                             "WHERE "
-                            "    user_id = " + aUserId + " "
+                            "   USR.id = " + user_id + " "
                             "ORDER BY "
-                            "    request_date;";
-
+                            "    REQ.request_date DESC "
+                            "LIMIT 1;";
     db_mutex_.lock_shared();
     PGresult* res = ExecuteDBQueryResponse(query_str);
     db_mutex_.unlock_shared();
     ExecStatusType resStatus = PQresultStatus(res);
-    std::vector<std::string> requests;
+    std::string result;
 
     if (resStatus == PGRES_TUPLES_OK)
     {
         int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++)
+        if (rows == 1)
         {
             nlohmann::json req;
-            req["req_id"]     = std::string{ PQgetvalue(res, i, 0) };
-            req["d_count"]    = std::string{ PQgetvalue(res, i, 2) };
-            req["d_price"]    = std::string{ PQgetvalue(res, i, 1) };
-            req["side"]       = std::string{ PQgetvalue(res, i, 3) };
+            req["req_id"]     = std::string{ PQgetvalue(res, 0, 0) };
+            req["user_login"] = std::string{ PQgetvalue(res, 0, 1) };
+            req["user_id"]    = std::string{ PQgetvalue(res, 0, 2) };
+            req["d_count"]    = std::string{ PQgetvalue(res, 0, 4) };
+            req["d_price"]    = std::string{ PQgetvalue(res, 0, 3) };
+            req["side"]       = std::string{ PQgetvalue(res, 0, 5) };
 
-            requests.push_back(req.dump());
+            result = req.dump();
         }
+
     }
     PQclear(res);
 
-    return requests;
+    return result;
 }
 
 std::vector<std::string> Core::GetCompletedDeals(const std::string& aUserId)
@@ -510,6 +517,26 @@ std::string Core::GetUSDQuotes()
     return result;
 }
 
+std::string Core::GetNameById(std::string user_id)
+{
+    std::string query_str = "SELECT login "
+                            "    FROM public.users_log_pus "
+                            "WHERE "
+                            "    id = " + user_id + ";";
+
+    db_mutex_.lock();
+    PGresult* res = ExecuteDBQueryResponse(query_str);
+    db_mutex_.unlock();
+    ExecStatusType resStatus = PQresultStatus(res);
+
+    std::string result;
+    if (resStatus == PGRES_TUPLES_OK)
+        result = PQgetvalue(res, 0, 0);
+
+    PQclear(res);
+    return result;
+}
+
 std::string Core::CancelRequest(const std::string& aUserId, const std::string req_id)
 {
     std::string query_str = "DELETE FROM public.request_purchase_sale "
@@ -526,12 +553,12 @@ std::string Core::CancelRequest(const std::string& aUserId, const std::string re
 
     if (resStatus == PGRES_COMMAND_OK && std::stoi(deleted_rows_count) == 1)
     {
-        std::cout << "UserId: " << aUserId << " canceled request" << req_id << std::endl;
+        std::cout << "UserId: " << aUserId << " canceled request " << req_id << std::endl;
         result = "Request canceled";
     }
     else
     {
-        std::cout << "UserId: " << aUserId << " not canceled request" << req_id << std::endl;
+        std::cout << "UserId: " << aUserId << " not canceled request " << req_id << std::endl;
         result = "Request not canceled";
     }
 
@@ -540,7 +567,7 @@ std::string Core::CancelRequest(const std::string& aUserId, const std::string re
     return result;
 }
 
-void Core::LogOut(const std::string& aUserId)//В Qt Gui можно поставить на закрытие приложения
+void Core::LogOut(const std::string& aUserId)
 {
     std::string query_str = "UPDATE public.users_log_pus "
                             "SET online=false "
